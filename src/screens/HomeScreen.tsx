@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -85,13 +86,26 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Arena floor gradient */}
+      <LinearGradient
+        colors={['#F5EDD8', '#EDE0C4', '#E8D8B8']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      {/* Hero accent orb — warm glow behind title */}
+      <View style={styles.heroOrb} pointerEvents="none" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.inner}
       >
         <View style={styles.hero}>
           <Text style={styles.title}>טרוקה</Text>
-          <Text style={styles.subtitle}>TROCA</Text>
+          <View style={styles.subtitleRow}>
+            <View style={styles.titleAccentLine} />
+            <Text style={styles.subtitle}>TROCA</Text>
+            <View style={styles.titleAccentLine} />
+          </View>
           <Text style={styles.tagline}>משחק קלפים של קפוארה</Text>
           {!authReady && <Text style={styles.authWaiting}>Connecting…</Text>}
         </View>
@@ -125,7 +139,9 @@ export default function HomeScreen({ navigation }: Props) {
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or join</Text>
+            <View style={styles.dividerStamp}>
+              <Text style={styles.dividerText}>OR JOIN</Text>
+            </View>
             <View style={styles.dividerLine} />
           </View>
 
@@ -167,10 +183,16 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: COLORS.bg },
   inner:       { flex: 1, justifyContent: 'space-between', padding: 24 },
-  hero:        { alignItems: 'center', paddingTop: 32 },
-  title:       { fontFamily: FONTS.display, fontSize: 72, color: COLORS.primary, lineHeight: 72 },
-  subtitle:    { fontFamily: FONTS.display, fontSize: 28, color: COLORS.text, letterSpacing: 8 },
-  tagline:     { fontFamily: FONTS.bodySemiBold, fontSize: 14, color: COLORS.muted, marginTop: 8 },
+
+  // Hero orb glow behind title
+  heroOrb: { position: 'absolute', top: -60, left: '50%', marginLeft: -130, width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(232,115,42,0.10)' },
+
+  hero:        { alignItems: 'center', paddingTop: 40 },
+  title:       { fontFamily: FONTS.display, fontSize: 86, color: COLORS.primary, lineHeight: 82 },
+  subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 },
+  titleAccentLine: { flex: 1, height: 2, backgroundColor: COLORS.border, maxWidth: 32 },
+  subtitle:    { fontFamily: FONTS.display, fontSize: 24, color: COLORS.leather, letterSpacing: 10 },
+  tagline:     { fontFamily: FONTS.bodySemiBold, fontSize: 13, color: COLORS.muted, marginTop: 10 },
   authWaiting: { fontFamily: FONTS.bodyRegular, fontSize: 12, color: COLORS.muted, marginTop: 8 },
 
   form:      { gap: 12 },
@@ -187,9 +209,10 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: COLORS.primary, fontFamily: FONTS.bodyExtraBold, fontSize: 16, letterSpacing: 1 },
   buttonDisabled:      { opacity: 0.45 },
 
-  divider:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { color: COLORS.muted, fontSize: 12 },
+  divider:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dividerLine:  { flex: 1, height: 1, backgroundColor: COLORS.border },
+  dividerStamp: { backgroundColor: COLORS.leather, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
+  dividerText:  { fontFamily: FONTS.bodyExtraBold, color: 'rgba(250,245,236,0.75)', fontSize: 10, letterSpacing: 2 },
 
   footer:     { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, paddingBottom: 8 },
   footerLink: { fontFamily: FONTS.bodyBold, fontSize: 11, color: COLORS.muted, letterSpacing: 1.5 },

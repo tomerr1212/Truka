@@ -14,6 +14,7 @@ import Animated, {
   withSpring,
   withTiming,
   withSequence,
+  withRepeat,
   FadeIn,
   FadeOut,
   SlideInDown,
@@ -100,6 +101,10 @@ export default function GameTableScreen({ route, navigation }: Props) {
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reshuffleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousMatchRef = useRef<Match | null>(null);
+
+  // Screen shake on clash result
+  const shakeX = useSharedValue(0);
+  const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shakeX.value }] }));
 
   const match = store.match;
   const localPlayer = selectLocalPlayer(store);
@@ -757,6 +762,22 @@ export default function GameTableScreen({ route, navigation }: Props) {
     chamadaPlayerName
   );
 
+  // Shake clash zone when result appears
+  const clashResultKey = clashResult?.lines.join();
+  useEffect(() => {
+    if (!clashResult) return;
+    const hasDamage = clashResult.color === COLORS.danger;
+    const amp = hasDamage ? 5 : 2.5;
+    shakeX.value = withSequence(
+      withTiming( amp, { duration: 18 }),
+      withRepeat(withSequence(
+        withTiming(-amp, { duration: 28 }),
+        withTiming( amp, { duration: 28 }),
+      ), 2, true),
+      withTiming(0,   { duration: 18 }),
+    );
+  }, [clashResultKey]);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Arena floor gradient */}
@@ -768,7 +789,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
       />
       {/* Phase banner */}
       <View style={[styles.phaseBanner, { backgroundColor: getPhaseBannerColor(phase) }]}>
-        <Text style={styles.phaseLabel} numberOfLines={1}>{phaseLabel}</Text>
+        <Animated.Text key={phase} entering={FadeIn.duration(220)} style={styles.phaseLabel} numberOfLines={1}>{phaseLabel}</Animated.Text>
         <TouchableOpacity style={styles.cheatSheetButton} onPress={() => setShowCheatSheet(true)}>
           <Text style={styles.cheatSheetButtonText}>CHEAT SHEET</Text>
         </TouchableOpacity>
@@ -798,6 +819,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
       </ScrollView>
 
       {/* ── Clash zone ── */}
+      <Animated.View style={[{ flex: 1 }, shakeStyle]}>
       <ScrollView style={styles.clashScroll} contentContainerStyle={styles.clashZone}>
         {showClashZone ? (
           <>
@@ -990,6 +1012,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
           </View>
         )}
       </ScrollView>
+      </Animated.View>
 
       {/* ── Local player area ── */}
       {localPlayer && (
@@ -1000,7 +1023,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.handRow}>
-            {store.myHand.map((cardId) => {
+            {store.myHand.map((cardId, idx) => {
               const card = CARD_MAP.get(cardId);
               if (!card) return null;
               const isLegalForAction = phase === 'ACTION_SELECTION' && (isAttacker || canDefenderAct) && card.type === 'action' && !myCardStaged;
@@ -1015,6 +1038,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
                   isSelected={isSelected}
                   isCommitted={isCommitted}
                   isLegal={isLegalNow}
+                  breatheDelay={idx * 180}
                   onPress={() => {
                     if (!isLegalNow) return;
                     if (card.subtype === 'floreo') {
@@ -1132,45 +1156,55 @@ export default function GameTableScreen({ route, navigation }: Props) {
       )}
 
       {showCheatSheet && (
-        <View style={styles.cheatSheetOverlay}>
+        <Animated.View entering={SlideInDown.springify().damping(22).stiffness(260)} style={styles.cheatSheetOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setShowCheatSheet(false)} activeOpacity={1} />
           <View style={styles.cheatSheetCard}>
             <View style={styles.cheatSheetHeader}>
-              <Text style={styles.cheatSheetTitle}>Clash Cheat Sheet</Text>
-              <TouchableOpacity onPress={() => setShowCheatSheet(false)}>
-                <Text style={styles.cheatSheetClose}>CLOSE</Text>
+              <Text style={styles.cheatSheetTitle}>CHEAT SHEET</Text>
+              <TouchableOpacity style={styles.cheatSheetCloseBtn} onPress={() => setShowCheatSheet(false)}>
+                <Text style={styles.cheatSheetClose}>✕</Text>
               </TouchableOpacity>
             </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingBottom: 8 }}>
+              {/* Collision grid — attacker row × defender col */}
+              <Text style={styles.cheatSectionLabel}>COLLISION RESULTS</Text>
+              <View style={styles.cheatSheetGrid}>
+                {/* Header row */}
+                <CheatCell label="" corner />
+                <CheatCell label="⚡ KICK" header />
+                <CheatCell label="◎ EVADE" header />
+                <CheatCell label="↓ DOWN" header />
+                {/* Kick row */}
+                <CheatCell label="⚡ KICK" side />
+                <CheatCell label="⊕ Both +1" outcome="damage" />
+                <CheatCell label="○ Nothing" outcome="neutral" />
+                <CheatCell label="⊕ Kick +1" outcome="damage" />
+                {/* Evasion row */}
+                <CheatCell label="◎ EVADE" side />
+                <CheatCell label="○ Nothing" outcome="neutral" />
+                <CheatCell label="↻ Play again" outcome="followup" />
+                <CheatCell label="⊕ Down +1" outcome="damage" />
+                {/* Knockdown row */}
+                <CheatCell label="↓ DOWN" side />
+                <CheatCell label="⊕ Kick +1" outcome="damage" />
+                <CheatCell label="⊕ Down +1" outcome="damage" />
+                <CheatCell label="⊕ Both +1" outcome="damage" />
+              </View>
 
-            <View style={styles.cheatSheetGrid}>
-              <CheatCell label="Your card" header />
-              <CheatCell label="Kick" header />
-              <CheatCell label="Evasion" header />
-              <CheatCell label="Knockdown" header />
-
-              <CheatCell label="Kick" side />
-              <CheatCell label="Both +1" danger />
-              <CheatCell label="No effect" neutral />
-              <CheatCell label="Kick +1" info />
-
-              <CheatCell label="Evasion" side />
-              <CheatCell label="No effect" neutral />
-              <CheatCell label="Play again" neutral />
-              <CheatCell label="Knockdown +1" info />
-
-              <CheatCell label="Knockdown" side />
-              <CheatCell label="Kick +1" info />
-              <CheatCell label="Knockdown +1" info />
-              <CheatCell label="Both +1" danger />
-            </View>
-
-            <View style={styles.cheatSheetNotes}>
-              <Text style={styles.cheatSheetNote}>Floreo: doubles any maculelê gained from the clash.</Text>
-              <Text style={styles.cheatSheetNote}>Kick vs Evasion + any Floreo: both players remove 1 maculelê.</Text>
-              <Text style={styles.cheatSheetNote}>Troca or Compra replacing that card cancels its Floreo.</Text>
-              <Text style={styles.cheatSheetNote}>Floreo does not stack.</Text>
-            </View>
+              {/* Special rules */}
+              <Text style={styles.cheatSectionLabel}>SPECIAL RULES</Text>
+              <View style={styles.cheatRules}>
+                <CheatRule glyph="✦" name="Floreo" rule="Doubles maculelê. Kick+Floreo vs Evasion → both −1." />
+                <CheatRule glyph="⇄" name="Troca" rule="REVEAL: replace your action card. Cancels attached Floreo." />
+                <CheatRule glyph="⊕" name="Compra" rule="REVEAL: 3rd player replaces attacker or defender." />
+                <CheatRule glyph="◈" name="Chamada" rule="START: target must attack face-up. You respond face-up." />
+                <CheatRule glyph="●" name="Malandragem" rule="START: peek any player's full hand." />
+                <CheatRule glyph="⟳" name="Agogô" rule="START: draw to 4 (0 if ≥4), skip your turn." />
+                <CheatRule glyph="✿" name="Jurema" rule="Auto: saves you at 5 maculelê — resets to 4." />
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </Animated.View>
       )}
     </SafeAreaView>
   );
@@ -1264,33 +1298,69 @@ function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype, fli
 function OpponentSlot({ player, isDefender, isAttacker, isSelectedTarget }: {
   player: Player; isDefender: boolean; isAttacker: boolean; isSelectedTarget: boolean;
 }) {
-  if (player.isEliminated) {
-    return (
-      <View style={styles.opponentSlotEliminated}>
-        <Text style={styles.opponentNameEliminated} numberOfLines={1}>{player.displayName}</Text>
-        <Text style={styles.spectatorLabel}>OUT</Text>
-      </View>
-    );
-  }
+  const slotShake   = useSharedValue(0);
+  const slotOpacity = useSharedValue(player.isEliminated ? 0.3 : 1);
+  const slotScale   = useSharedValue(player.isEliminated ? 0.86 : 1);
+  const prevElim    = useRef(player.isEliminated);
+
+  useEffect(() => {
+    if (player.isEliminated && !prevElim.current) {
+      // Shake then collapse
+      slotShake.value = withSequence(
+        withTiming(-7, { duration: 45 }),
+        withRepeat(withSequence(
+          withTiming(7,  { duration: 55 }),
+          withTiming(-7, { duration: 55 }),
+        ), 3, true),
+        withTiming(0, { duration: 45 }),
+      );
+      slotOpacity.value = withTiming(0.3,  { duration: 480 });
+      slotScale.value   = withSpring(0.86, { stiffness: 160, damping: 18 });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    prevElim.current = player.isEliminated;
+  }, [player.isEliminated]);
+
+  const elimStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: slotShake.value }, { scale: slotScale.value }],
+    opacity: slotOpacity.value,
+  }));
+
   const cardCount = Math.min(player.hand.length, 7);
   return (
-    <View style={[styles.opponentSlot, isDefender && styles.opponentDefender, isAttacker && styles.opponentAttacker, isSelectedTarget && styles.opponentTargeted]}>
-      <Text style={styles.opponentName} numberOfLines={1}>{player.displayName}</Text>
-      <View style={styles.opponentCardFan}>
-        {Array.from({ length: cardCount }).map((_, i) => (
-          <View key={i} style={[styles.opponentCardMini, i > 0 && styles.opponentCardMiniOverlap]} />
-        ))}
-        {cardCount === 0 && <Text style={{ fontSize: 9, color: COLORS.muted }}>empty</Text>}
-      </View>
-      <MaculeleBar count={player.maculeleCount} small />
-      {!player.isConnected && <Text style={styles.disconnected}>⚡</Text>}
-    </View>
+    <Animated.View style={[
+      styles.opponentSlot,
+      !player.isEliminated && isDefender     && styles.opponentDefender,
+      !player.isEliminated && isAttacker     && styles.opponentAttacker,
+      !player.isEliminated && isSelectedTarget && styles.opponentTargeted,
+      player.isEliminated  && styles.opponentSlotEliminated,
+      elimStyle,
+    ]}>
+      <Text style={player.isEliminated ? styles.opponentNameEliminated : styles.opponentName} numberOfLines={1}>
+        {player.displayName}
+      </Text>
+      {player.isEliminated ? (
+        <Text style={styles.spectatorLabel}>OUT</Text>
+      ) : (
+        <>
+          <View style={styles.opponentCardFan}>
+            {Array.from({ length: cardCount }).map((_, i) => (
+              <View key={i} style={[styles.opponentCardMini, i > 0 && styles.opponentCardMiniOverlap]} />
+            ))}
+            {cardCount === 0 && <Text style={{ fontSize: 9, color: COLORS.muted }}>empty</Text>}
+          </View>
+          <MaculeleBar count={player.maculeleCount} small />
+          {!player.isConnected && <Text style={styles.disconnected}>⚡</Text>}
+        </>
+      )}
+    </Animated.View>
   );
 }
 
 function MaculeleBar({ count, small }: { count: number; small?: boolean }) {
   const isDanger = count >= 4;
   const scale = useSharedValue(1);
+  const pulseScale = useSharedValue(1);
   const prevCount = useRef(count);
 
   useEffect(() => {
@@ -1303,7 +1373,24 @@ function MaculeleBar({ count, small }: { count: number; small?: boolean }) {
     prevCount.current = count;
   }, [count]);
 
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  useEffect(() => {
+    if (isDanger) {
+      pulseScale.value = withRepeat(
+        withSequence(
+          withTiming(1.05, { duration: 750 }),
+          withTiming(1.0,  { duration: 750 }),
+        ),
+        -1,
+        false,
+      );
+    } else {
+      pulseScale.value = withTiming(1, { duration: 200 });
+    }
+  }, [isDanger]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value * pulseScale.value }],
+  }));
 
   return (
     <Animated.View style={[styles.maculeleRow, animStyle]}>
@@ -1319,8 +1406,9 @@ function MaculeleBar({ count, small }: { count: number; small?: boolean }) {
   );
 }
 
-function CardTile({ cardId, isSelected, isCommitted, isLegal, onPress }: {
+function CardTile({ cardId, isSelected, isCommitted, isLegal, onPress, breatheDelay = 0 }: {
   cardId: string; isSelected: boolean; isCommitted?: boolean; isLegal: boolean; onPress: () => void;
+  breatheDelay?: number;
 }) {
   const card = CARD_MAP.get(cardId);
   if (!card) return null;
@@ -1329,14 +1417,33 @@ function CardTile({ cardId, isSelected, isCommitted, isLegal, onPress }: {
 
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
+  const breathe = useSharedValue(1);
 
   useEffect(() => {
     scale.value     = withSpring(isSelected ? 1.08 : 1,  { stiffness: 300, damping: 16 });
     translateY.value = withSpring(isSelected ? -9 : 0, { stiffness: 300, damping: 16 });
   }, [isSelected]);
 
+  useEffect(() => {
+    if (isLegal && !isSelected && !isCommitted) {
+      breathe.value = withRepeat(
+        withSequence(
+          withTiming(1.025, { duration: 900 + breatheDelay }),
+          withTiming(1.0,   { duration: 900 }),
+        ),
+        -1,
+        false,
+      );
+    } else {
+      breathe.value = withTiming(1, { duration: 150 });
+    }
+  }, [isLegal, isSelected, isCommitted]);
+
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }, { translateY: translateY.value }],
+    transform: [
+      { scale: scale.value * breathe.value },
+      { translateY: translateY.value },
+    ],
   }));
 
   return (
@@ -1366,29 +1473,45 @@ function CardTile({ cardId, isSelected, isCommitted, isLegal, onPress }: {
   );
 }
 
-function CheatCell({ label, header, side, danger, info, neutral }: {
+function CheatCell({ label, header, side, corner, outcome }: {
   label: string;
   header?: boolean;
   side?: boolean;
-  danger?: boolean;
-  info?: boolean;
-  neutral?: boolean;
+  corner?: boolean;
+  outcome?: 'damage' | 'neutral' | 'followup';
 }) {
+  const outcomeColor =
+    outcome === 'damage'  ? COLORS.danger :
+    outcome === 'neutral' ? COLORS.muted :
+    outcome === 'followup'? COLORS.gold  : undefined;
+
   return (
     <View style={[
       styles.cheatCell,
       header && styles.cheatCellHeader,
-      side && styles.cheatCellSide,
-      danger && styles.cheatCellDanger,
-      info && styles.cheatCellInfo,
-      neutral && styles.cheatCellNeutral,
+      side   && styles.cheatCellSide,
+      corner && styles.cheatCellCorner,
+      outcome && { borderLeftWidth: 3, borderLeftColor: outcomeColor },
     ]}>
       <Text style={[
         styles.cheatCellText,
         (header || side) && styles.cheatCellTextStrong,
-      ]}>
+        outcome && { color: outcomeColor, fontFamily: FONTS.bodyBold },
+      ]} numberOfLines={2}>
         {label}
       </Text>
+    </View>
+  );
+}
+
+function CheatRule({ glyph, name, rule }: { glyph: string; name: string; rule: string }) {
+  return (
+    <View style={styles.cheatRuleRow}>
+      <Text style={styles.cheatRuleGlyph}>{glyph}</Text>
+      <View style={styles.cheatRuleBody}>
+        <Text style={styles.cheatRuleName}>{name}</Text>
+        <Text style={styles.cheatRuleText}>{rule}</Text>
+      </View>
     </View>
   );
 }
@@ -1437,22 +1560,33 @@ const styles = StyleSheet.create({
   reshuffleBannerText: { color: '#146C6C', fontSize: 12, fontWeight: '800', textAlign: 'center', letterSpacing: 0.3 },
 
   // ── Cheat sheet overlay ──
-  cheatSheetOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(44,26,14,0.62)', justifyContent: 'center', padding: 16 },
-  cheatSheetCard:    { backgroundColor: COLORS.surface, borderRadius: 24, padding: 16, borderWidth: 2, borderColor: COLORS.border, gap: 12 },
+  cheatSheetOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(44,26,14,0.68)', justifyContent: 'flex-end' },
+  cheatSheetCard:    { backgroundColor: COLORS.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, borderTopWidth: 2, borderLeftWidth: 2, borderRightWidth: 2, borderColor: COLORS.border, gap: 14, maxHeight: '90%' },
   cheatSheetHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cheatSheetTitle:   { color: COLORS.text, fontFamily: FONTS.display, fontSize: 22 },
-  cheatSheetClose:   { color: COLORS.primary, fontSize: 12, fontWeight: '900', letterSpacing: 0.8 },
-  cheatSheetGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 1, backgroundColor: COLORS.border, padding: 1, borderRadius: 14, overflow: 'hidden' },
-  cheatCell:         { width: '24.6%', minHeight: 52, backgroundColor: COLORS.card, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
-  cheatCellHeader:   { backgroundColor: COLORS.leather },
-  cheatCellSide:     { backgroundColor: COLORS.ember },
-  cheatCellDanger:   { backgroundColor: '#F7D8D4' },
-  cheatCellInfo:     { backgroundColor: '#DFF0E8' },
-  cheatCellNeutral:  { backgroundColor: '#EDE7DA' },
-  cheatCellText:     { color: COLORS.text, fontSize: 11, fontWeight: '700', textAlign: 'center' },
-  cheatCellTextStrong: { color: '#fff', fontWeight: '900' },
-  cheatSheetNotes:   { gap: 6, backgroundColor: '#FFF8EA', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: COLORS.border },
-  cheatSheetNote:    { color: COLORS.text, fontSize: 12, lineHeight: 18 },
+  cheatSheetTitle:   { color: COLORS.text, fontFamily: FONTS.display, fontSize: 24 },
+  cheatSheetCloseBtn:{ backgroundColor: COLORS.sand, borderRadius: 999, width: 28, height: 28, justifyContent: 'center', alignItems: 'center' },
+  cheatSheetClose:   { color: COLORS.leather, fontFamily: FONTS.bodyBold, fontSize: 13 },
+  cheatSectionLabel: { fontFamily: FONTS.bodyExtraBold, fontSize: 10, color: COLORS.muted, letterSpacing: 2, marginBottom: -6 },
+
+  // Collision grid
+  cheatSheetGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 1, backgroundColor: COLORS.border, padding: 1, borderRadius: 14, overflow: 'hidden' },
+  cheatCell:           { width: '24.6%', minHeight: 48, backgroundColor: COLORS.card, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5, paddingVertical: 6 },
+  cheatCellHeader:     { backgroundColor: COLORS.leather },
+  cheatCellSide:       { backgroundColor: COLORS.ember },
+  cheatCellCorner:     { backgroundColor: COLORS.leather },
+  cheatCellDanger:     { backgroundColor: '#F7D8D4' },
+  cheatCellInfo:       { backgroundColor: '#DFF0E8' },
+  cheatCellNeutral:    { backgroundColor: '#EDE7DA' },
+  cheatCellText:       { fontFamily: FONTS.bodySemiBold, color: COLORS.text, fontSize: 10, textAlign: 'center' },
+  cheatCellTextStrong: { fontFamily: FONTS.bodyExtraBold, color: '#fff', fontSize: 10 },
+
+  // Special rules list
+  cheatRules:    { gap: 8 },
+  cheatRuleRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: COLORS.bg, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: COLORS.border },
+  cheatRuleGlyph:{ fontSize: 16, width: 22, textAlign: 'center', marginTop: 1 },
+  cheatRuleBody: { flex: 1, gap: 1 },
+  cheatRuleName: { fontFamily: FONTS.bodyBold, fontSize: 12, color: COLORS.text },
+  cheatRuleText: { fontFamily: FONTS.bodyRegular, fontSize: 11, color: COLORS.muted, lineHeight: 16 },
 
   // ── Opponents row ──
   opponentsRow:     { maxHeight: 130, marginVertical: 6 },
