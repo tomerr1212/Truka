@@ -74,10 +74,10 @@ export default function LobbyScreen({ route, navigation }: Props) {
           <View key={id} style={styles.playerRow}>
             <View style={styles.playerInfo}>
               <Text style={styles.playerName}>{info.displayName}</Text>
-              {id === room?.hostId && <Text style={styles.hostBadge}>HOST</Text>}
+              {id === room?.hostId && <View style={styles.hostBadge}><Text style={styles.hostBadgeText}>HOST</Text></View>}
             </View>
             <View style={[styles.readyBadge, info.isReady ? styles.readyYes : styles.readyNo]}>
-              <Text style={styles.readyText}>{info.isReady ? 'READY' : 'WAITING'}</Text>
+              <Text style={[styles.readyText, info.isReady ? styles.readyTextYes : styles.readyTextNo]}>{info.isReady ? 'READY' : 'WAITING'}</Text>
             </View>
           </View>
         ))}
@@ -110,29 +110,39 @@ export default function LobbyScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: COLORS.bg, padding: 24 },
-  header:      { alignItems: 'center', marginBottom: 32 },
-  title:       { fontSize: 13, fontWeight: '700', color: COLORS.muted, letterSpacing: 3 },
-  codeBox:     { backgroundColor: COLORS.card, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 32, alignItems: 'center', marginTop: 8, borderWidth: 1.5, borderColor: COLORS.border },
-  code:        { fontSize: 36, fontWeight: '900', color: COLORS.primary, letterSpacing: 8 },
-  codeTap:     { fontSize: 11, color: COLORS.muted, marginTop: 4 },
+  header:      { alignItems: 'center', marginBottom: 28 },
+  title:       { fontSize: 11, fontWeight: '800', color: COLORS.muted, letterSpacing: 3 },
 
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: COLORS.muted, letterSpacing: 1.5, marginBottom: 12 },
+  // Room code stamp
+  codeBox:     { backgroundColor: COLORS.leather, borderRadius: 18, paddingVertical: 18, paddingHorizontal: 36, alignItems: 'center', marginTop: 8,
+    shadowColor: COLORS.leather, shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5 },
+  code:        { fontSize: 36, fontWeight: '900', color: '#FAF5EC', letterSpacing: 10 },
+  codeTap:     { fontSize: 10, color: 'rgba(250,245,236,0.55)', marginTop: 5, fontWeight: '600', letterSpacing: 1 },
+
+  sectionLabel: { fontSize: 10, fontWeight: '800', color: COLORS.muted, letterSpacing: 2, marginBottom: 12 },
   playerList:   { flex: 1 },
-  playerRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.card, borderRadius: 12, padding: 14, marginBottom: 8 },
+  playerRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: 14, padding: 14, marginBottom: 8,
+    borderWidth: 1.5, borderColor: COLORS.border,
+    shadowColor: COLORS.leather, shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
   playerInfo:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  playerName:   { fontWeight: '700', fontSize: 15, color: COLORS.text },
-  hostBadge:    { backgroundColor: COLORS.primary, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  readyBadge:   { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
-  readyYes:     { backgroundColor: '#D4EDDA' },
-  readyNo:      { backgroundColor: '#F8D7DA' },
-  readyText:    { fontSize: 10, fontWeight: '700' },
+  playerName:   { fontWeight: '800', fontSize: 15, color: COLORS.text },
+  hostBadge:    { backgroundColor: COLORS.gold, borderRadius: 5, paddingHorizontal: 7, paddingVertical: 2 },
+  hostBadgeText:{ fontSize: 9, fontWeight: '900', color: '#fff', letterSpacing: 0.8 },
+  readyBadge:   { borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1.5 },
+  readyYes:     { backgroundColor: '#E2F4E8', borderColor: '#6DBF85' },
+  readyNo:      { backgroundColor: COLORS.surface, borderColor: COLORS.sand },
+  readyText:    { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  readyTextYes: { color: '#2A7D45' },
+  readyTextNo:  { color: COLORS.muted },
   waitingNote:  { color: COLORS.muted, fontSize: 13, textAlign: 'center', marginTop: 16 },
 
-  actions:      { gap: 12 },
-  readyButton:       { backgroundColor: COLORS.card, borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 2, borderColor: COLORS.border },
-  readyButtonActive: { borderColor: COLORS.accent, backgroundColor: '#E8F8F8' },
+  actions:      { gap: 12, marginTop: 8 },
+  readyButton:       { backgroundColor: COLORS.surface, borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 2, borderColor: COLORS.border,
+    shadowColor: COLORS.leather, shadowOpacity: 0.06, shadowRadius: 4, elevation: 1 },
+  readyButtonActive: { borderColor: COLORS.accent, backgroundColor: '#E4F7F7',
+    shadowColor: COLORS.accent, shadowOpacity: 0.2, shadowRadius: 6, elevation: 2 },
   readyButtonText:   { fontWeight: '800', fontSize: 15, color: COLORS.text },
-  startButton:         { backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
-  startButtonDisabled: { backgroundColor: COLORS.muted },
+  startButton:         { backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderBottomWidth: 4, borderBottomColor: COLORS.ember },
+  startButtonDisabled: { backgroundColor: COLORS.muted, borderBottomColor: '#7A6A60' },
   startButtonText:     { color: '#fff', fontWeight: '800', fontSize: 16, letterSpacing: 1 },
 });

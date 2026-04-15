@@ -1,17 +1,27 @@
 // ─── Troca color palette ──────────────────────────────────────────────────────
-// Warm orange primary, deep brown, cream, turquoise accent — matching PDF identity
+// Warm capoeira arena: clay, parchment, leather, turquoise, ember, gold
 
 export const COLORS = {
-  primary:      '#E8732A',  // warm orange
+  // Role / action colors
+  primary:      '#E8732A',  // clay orange — attacker, primary CTA
   primaryLight: '#FDE8D8',
-  accent:       '#3ABFBF',  // turquoise
-  danger:       '#C0392B',  // maculelê red
-  bg:           '#F5ECD7',  // warm cream
-  surface:      '#FDFAF3',
-  card:         '#FFFFFF',
+  accent:       '#3ABFBF',  // turquoise — defender, evasion
+  danger:       '#C0392B',  // maculelê red — penalty, elimination
+  ember:        '#8B2F0E',  // deep ember — REVEAL banner, high-contrast
+  gold:         '#C9983A',  // Floreo, magic activation, premium highlight
+  coral:        '#E85F40',  // near-elimination warning (4 maculelê)
+
+  // Surfaces (parchment + arena)
+  bg:           '#F0E6CC',  // arena floor — warm sand
+  surface:      '#FAF5EC',  // parchment — cards, elevated panels
+  card:         '#FAF5EC',  // card surface (parchment, not white)
+
+  // Text + borders
   text:         '#2C1A0E',  // deep brown
-  muted:        '#9E8A74',
-  border:       '#DDD0BC',
+  leather:      '#3D2210',  // dark leather — stamps, token outlines
+  muted:        '#9E8A74',  // secondary text
+  border:       '#C4A97D',  // engraved parchment border
+  sand:         '#DDD0BC',  // inactive dividers, empty slots
 };
 
 export const FONT = {

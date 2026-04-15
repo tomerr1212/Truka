@@ -7,6 +7,18 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  FadeIn,
+  FadeOut,
+  SlideInDown,
+  ZoomIn,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -32,6 +44,40 @@ type Props = NativeStackScreenProps<RootStackParamList, 'GameTable'>;
 
 const subtypeMap = new Map<string, string>();
 buildCardDefinitions().forEach((card, id) => subtypeMap.set(id, card.subtype));
+
+// ─── Visual helpers ───────────────────────────────────────────────────────────
+
+const SUBTYPE_GLYPH: Record<string, string> = {
+  kick:        '⚡',
+  evasion:     '◎',
+  knockdown:   '↓',
+  floreo:      '✦',
+  troca:       '⇄',
+  chamada:     '◈',
+  compra:      '⊕',
+  agogo:       '⟳',
+  malandragem: '●',
+  jurema:      '✿',
+};
+
+function getCardAccentColor(subtype: string): string {
+  if (subtype === 'kick')    return COLORS.primary;
+  if (subtype === 'evasion') return COLORS.accent;
+  if (subtype === 'floreo')  return COLORS.gold;
+  if (subtype === 'knockdown') return COLORS.leather;
+  return COLORS.gold; // specials
+}
+
+function getPhaseBannerColor(phase: string): string {
+  switch (phase) {
+    case 'START_OF_TURN':    return COLORS.primary;
+    case 'ACTION_SELECTION': return COLORS.leather;
+    case 'REVEAL':           return COLORS.ember;
+    case 'BURN_REVEAL':      return COLORS.danger;
+    case 'JUREMA_REVEAL':    return COLORS.gold;
+    default:                 return COLORS.primary;
+  }
+}
 
 export default function GameTableScreen({ route, navigation }: Props) {
   const { matchId } = route.params;
@@ -713,7 +759,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       {/* Phase banner */}
-      <View style={[styles.phaseBanner, phase === 'REVEAL' && styles.phaseBannerReveal]}>
+      <View style={[styles.phaseBanner, { backgroundColor: getPhaseBannerColor(phase) }]}>
         <Text style={styles.phaseLabel} numberOfLines={1}>{phaseLabel}</Text>
         <TouchableOpacity style={styles.cheatSheetButton} onPress={() => setShowCheatSheet(true)}>
           <Text style={styles.cheatSheetButtonText}>CHEAT SHEET</Text>
@@ -752,27 +798,33 @@ export default function GameTableScreen({ route, navigation }: Props) {
               <ClashSlot
                 label={attackerName} hasStaged={attackerHasStaged} isLocal={isAttacker} role="attacker"
                 cardName={attackerCardName}
+                cardSubtype={attackerStagedCard ? CARD_MAP.get(attackerStagedCard.actionCardId)?.subtype : null}
               />
               <View style={styles.vsContainer}>
                 <Text style={styles.vsText}>VS</Text>
                 <View style={styles.deckBadge}>
                   <Text style={styles.deckBadgeText}>{match?.deck.length ?? 0}</Text>
-                  <Text style={styles.deckBadgeLabel}>deck</Text>
+                  <Text style={styles.deckBadgeLabel}>DECK</Text>
                 </View>
               </View>
               <ClashSlot
                 label={defenderName ?? '?'} hasStaged={defenderHasStaged} isLocal={isDefender} role="defender"
                 cardName={defenderCardName}
+                cardSubtype={defenderStagedCard ? CARD_MAP.get(defenderStagedCard.actionCardId)?.subtype : null}
               />
             </View>
 
             {/* Result banner */}
             {clashResult && (
-              <View style={[styles.resultBanner, { borderColor: clashResult.color }]}>
+              <Animated.View
+                key={clashResult.lines.join()}
+                entering={ZoomIn.springify().damping(14).stiffness(280)}
+                style={[styles.resultBanner, { borderColor: clashResult.color }]}
+              >
                 {clashResult.lines.map((line, i) => (
                   <Text key={i} style={[styles.resultLine, { color: clashResult.color }]}>{line}</Text>
                 ))}
-              </View>
+              </Animated.View>
             )}
 
             {/* ── TROCA panel ── */}
@@ -863,7 +915,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
 
             {/* CONTINUE / waiting */}
             {phase === 'REVEAL' && isAttacker && specialMode === null && (
-              <TouchableOpacity style={styles.continueButton} onPress={handleSkipReveal}>
+              <TouchableOpacity style={styles.continueButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleSkipReveal(); }}>
                 <Text style={styles.continueButtonText}>CONTINUE →</Text>
               </TouchableOpacity>
             )}
@@ -872,24 +924,24 @@ export default function GameTableScreen({ route, navigation }: Props) {
             )}
           </>
         ) : isJuremaReveal ? (
-          <View style={styles.burnRevealZone}>
-            <Text style={styles.burnRevealTitle}>JUREMA SAVED!</Text>
+          <Animated.View entering={SlideInDown.springify().damping(16)} style={[styles.burnRevealZone, styles.juremaRevealZone]}>
+            <Text style={styles.juremaRevealTitle}>✿  JUREMA SAVED!  ✿</Text>
             <Text style={styles.burnRevealSub}>
               {match?.players.find(p => p.id === match.juremaPlayerId)?.displayName ?? '?'} reached 5 maculelê but used Jurema — reset to 4.
             </Text>
             {isAttacker && (
-              <TouchableOpacity style={styles.continueButton} onPress={handleDismissJurema}>
+              <TouchableOpacity style={styles.continueButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); handleDismissJurema(); }}>
                 <Text style={styles.continueButtonText}>CONTINUE →</Text>
               </TouchableOpacity>
             )}
             {!isAttacker && (
               <Text style={styles.waitingReveal}>Waiting for {attackerName} to continue…</Text>
             )}
-          </View>
+          </Animated.View>
         ) : isBurnReveal ? (
-          <View style={styles.burnRevealZone}>
+          <Animated.View entering={SlideInDown.springify().damping(16)} style={styles.burnRevealZone}>
             <Text style={styles.burnRevealTitle}>
-              PENALTY — {burnRevealPlayer?.displayName ?? '?'}'s hand
+              EXPOSED — {burnRevealPlayer?.displayName ?? '?'}'s hand
             </Text>
             <Text style={styles.burnRevealSub}>
               {burnRevealPlayer ? `${burnRevealPlayer.maculeleCount} → ${burnRevealPlayer.maculeleCount + 1} maculelê` : ''}
@@ -901,23 +953,27 @@ export default function GameTableScreen({ route, navigation }: Props) {
               ))}
             </ScrollView>
             {isAttacker && (
-              <TouchableOpacity style={styles.continueButton} onPress={handleResolveBurnReveal}>
+              <TouchableOpacity style={styles.continueButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleResolveBurnReveal(); }}>
                 <Text style={styles.continueButtonText}>CONTINUE →</Text>
               </TouchableOpacity>
             )}
             {!isAttacker && (
               <Text style={styles.waitingReveal}>Waiting for {attackerName} to continue…</Text>
             )}
-          </View>
+          </Animated.View>
         ) : (
           <View style={styles.idleZone}>
             <View style={styles.deckPile}>
+              <View style={[styles.deckStack, (match?.deck.length ?? 0) === 0 && styles.deckStackEmpty]}>
+                <Text style={styles.deckStackCount}>{match?.deck.length ?? 0}</Text>
+              </View>
               <Text style={styles.deckLabel}>DECK</Text>
-              <Text style={styles.deckCount}>{match?.deck.length ?? 0}</Text>
             </View>
             <View style={styles.discardPileIdle}>
+              <View style={[styles.deckStack, { backgroundColor: COLORS.sand, borderColor: COLORS.border }, (match?.discardPile.length ?? 0) === 0 && styles.deckStackEmpty]}>
+                <Text style={[styles.deckStackCount, { color: COLORS.muted }]}>{match?.discardPile.length ?? 0}</Text>
+              </View>
               <Text style={styles.deckLabel}>DISCARD</Text>
-              <Text style={styles.deckCount}>{match?.discardPile.length ?? 0}</Text>
             </View>
           </View>
         )}
@@ -942,7 +998,8 @@ export default function GameTableScreen({ route, navigation }: Props) {
               const isCommitted = localStagedActionId === cardId;
               return (
                 <CardTile
-                  key={cardId} cardId={cardId}
+                  key={cardId}
+                  cardId={cardId}
                   isSelected={isSelected}
                   isCommitted={isCommitted}
                   isLegal={isLegalNow}
@@ -970,7 +1027,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
           {isAttacker && phase === 'START_OF_TURN' && !isAgogoPending && !isMalandragemPending && !isChamadaPending && (
             <TouchableOpacity
               style={[styles.attackButton, !selectedTargetId && styles.attackButtonDisabled]}
-              onPress={handleAttack} disabled={!selectedTargetId}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handleAttack(); }} disabled={!selectedTargetId}
             >
               <Text style={styles.attackButtonText}>
                 {selectedTargetId ? `ATTACK ${selectedTargetName}` : 'TAP A PLAYER TO ATTACK'}
@@ -1054,7 +1111,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
           {(isAttacker || canDefenderAct) && phase === 'ACTION_SELECTION' && !myCardStaged && !hasNoActionCards && !isEliminated && (
             <TouchableOpacity
               style={[styles.playButton, !store.selectedCardId && styles.playButtonDisabled]}
-              onPress={handlePlayAction} disabled={!store.selectedCardId}
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); handlePlayAction(); }} disabled={!store.selectedCardId}
             >
               <Text style={styles.playButtonText}>PLAY CARD</Text>
             </TouchableOpacity>
@@ -1109,29 +1166,41 @@ export default function GameTableScreen({ route, navigation }: Props) {
 
 // ─── ClashSlot ─────────────────────────────────────────────────────────────────
 
-function ClashSlot({ label, hasStaged, isLocal, role, cardName }: {
+function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype }: {
   label: string; hasStaged: boolean; isLocal: boolean;
-  role: 'attacker' | 'defender'; cardName: string | null;
+  role: 'attacker' | 'defender'; cardName: string | null; cardSubtype?: string | null;
 }) {
-  const borderColor = role === 'attacker' ? COLORS.primary : COLORS.accent;
-  const bg = role === 'attacker' ? COLORS.primaryLight : '#E8F8F8';
+  const roleColor  = role === 'attacker' ? COLORS.primary : COLORS.accent;
+  const roleBg     = role === 'attacker' ? COLORS.primaryLight : '#E0F5F5';
+  const roleLabel  = role === 'attacker' ? 'ATTACKER' : 'DEFENDER';
+  const faceDown   = hasStaged && !cardName;
   return (
     <View style={styles.clashSlot}>
-      <Text style={styles.clashSlotName} numberOfLines={1}>{label}</Text>
-      <View style={[styles.clashCard,
-        (hasStaged || cardName) && { borderColor, backgroundColor: bg, borderWidth: 2.5 },
+      <Text style={[styles.clashSlotRole, role === 'attacker' ? styles.clashSlotRoleAttacker : styles.clashSlotRoleDefender]}>
+        {roleLabel}
+      </Text>
+      <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.muted, maxWidth: 90, textAlign: 'center' }} numberOfLines={1}>{label}</Text>
+      <View style={[
+        styles.clashCard,
+        faceDown && styles.clashCardBack,
+        cardName && { borderColor: roleColor, backgroundColor: roleBg, borderWidth: 2.5 },
       ]}>
         {cardName ? (
-          <Text style={[styles.clashCardRevealedName, { color: borderColor }]} numberOfLines={2}>{cardName}</Text>
-        ) : hasStaged ? (
           <>
-            <Text style={[styles.clashCardIcon, { color: borderColor }]}>▪</Text>
-            <Text style={[styles.clashCardReady, { color: borderColor }]}>{isLocal ? 'You' : '✓'}</Text>
+            {cardSubtype && <Text style={[styles.clashCardRevealedGlyph, { color: roleColor }]}>{SUBTYPE_GLYPH[cardSubtype] ?? '▪'}</Text>}
+            <Text style={[styles.clashCardRevealedName, { color: roleColor }]} numberOfLines={2}>{cardName}</Text>
           </>
+        ) : faceDown ? (
+          <View style={styles.clashCardBackPattern}>
+            <Text style={styles.clashCardBackDiamond}>◆</Text>
+          </View>
         ) : (
           <Text style={styles.clashCardEmpty}>?</Text>
         )}
       </View>
+      {faceDown && (
+        <Text style={[styles.clashCardReady, { color: roleColor }]}>{isLocal ? 'Placed ✓' : 'Waiting…'}</Text>
+      )}
     </View>
   );
 }
@@ -1149,10 +1218,16 @@ function OpponentSlot({ player, isDefender, isAttacker, isSelectedTarget }: {
       </View>
     );
   }
+  const cardCount = Math.min(player.hand.length, 7);
   return (
     <View style={[styles.opponentSlot, isDefender && styles.opponentDefender, isAttacker && styles.opponentAttacker, isSelectedTarget && styles.opponentTargeted]}>
       <Text style={styles.opponentName} numberOfLines={1}>{player.displayName}</Text>
-      <Text style={styles.opponentCards}>{'♦'.repeat(Math.min(player.hand.length, 7))}</Text>
+      <View style={styles.opponentCardFan}>
+        {Array.from({ length: cardCount }).map((_, i) => (
+          <View key={i} style={[styles.opponentCardMini, i > 0 && styles.opponentCardMiniOverlap]} />
+        ))}
+        {cardCount === 0 && <Text style={{ fontSize: 9, color: COLORS.muted }}>empty</Text>}
+      </View>
       <MaculeleBar count={player.maculeleCount} small />
       {!player.isConnected && <Text style={styles.disconnected}>⚡</Text>}
     </View>
@@ -1160,12 +1235,33 @@ function OpponentSlot({ player, isDefender, isAttacker, isSelectedTarget }: {
 }
 
 function MaculeleBar({ count, small }: { count: number; small?: boolean }) {
+  const isDanger = count >= 4;
+  const scale = useSharedValue(1);
+  const prevCount = useRef(count);
+
+  useEffect(() => {
+    if (count > prevCount.current) {
+      scale.value = withSequence(
+        withTiming(1.3, { duration: 80 }),
+        withSpring(1, { stiffness: 420, damping: 12 })
+      );
+    }
+    prevCount.current = count;
+  }, [count]);
+
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
   return (
-    <View style={styles.maculeleRow}>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <View key={`mac-${i}`} style={[small ? styles.maculeleSmall : styles.maculeleDot, i < count ? styles.maculeleActive : styles.maculeleInactive]} />
-      ))}
-    </View>
+    <Animated.View style={[styles.maculeleRow, animStyle]}>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const isActive = i < count;
+        const tokenStyle = small ? styles.maculeleSmall : styles.maculeleDot;
+        const colorStyle = isActive
+          ? (isDanger ? styles.maculeleDanger : styles.maculeleActive)
+          : styles.maculeleInactive;
+        return <View key={`mac-${i}`} style={[tokenStyle, colorStyle]} />;
+      })}
+    </Animated.View>
   );
 }
 
@@ -1174,22 +1270,45 @@ function CardTile({ cardId, isSelected, isCommitted, isLegal, onPress }: {
 }) {
   const card = CARD_MAP.get(cardId);
   if (!card) return null;
+  const accentColor = getCardAccentColor(card.subtype);
+  const glyph = SUBTYPE_GLYPH[card.subtype] ?? '▪';
+
+  const scale = useSharedValue(1);
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    scale.value     = withSpring(isSelected ? 1.08 : 1,  { stiffness: 300, damping: 16 });
+    translateY.value = withSpring(isSelected ? -9 : 0, { stiffness: 300, damping: 16 });
+  }, [isSelected]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }, { translateY: translateY.value }],
+  }));
+
   return (
-    <TouchableOpacity
-      style={[
-        styles.cardTile,
-        isSelected && styles.cardTileSelected,
-        isCommitted && styles.cardTileCommitted,
-        !isLegal && !isCommitted && styles.cardTileIllegal,
-      ]}
-      onPress={onPress}
-      onLongPress={() => Alert.alert(`${card.nameHe} · ${card.namePt}`, card.descriptionHe)}
-      activeOpacity={isLegal ? 0.7 : 0.9}
-    >
-      {isCommitted && <Text style={styles.cardTileCommittedBadge}>PLAYED</Text>}
-      <Text style={styles.cardSubtype}>{card.subtype.slice(0, 3).toUpperCase()}</Text>
-      <Text style={styles.cardName} numberOfLines={1}>{card.nameHe}</Text>
-    </TouchableOpacity>
+    <Animated.View style={animStyle}>
+      <TouchableOpacity
+        style={[
+          styles.cardTile,
+          { borderLeftColor: accentColor },
+          isLegal && !isSelected && !isCommitted && styles.cardTileLegal,
+          isSelected && styles.cardTileSelected,
+          isCommitted && styles.cardTileCommitted,
+          !isLegal && !isCommitted && styles.cardTileIllegal,
+        ]}
+        onPress={() => {
+          if (isLegal) Haptics.selectionAsync();
+          onPress();
+        }}
+        onLongPress={() => Alert.alert(`${card.nameHe} · ${card.namePt}`, card.descriptionHe)}
+        activeOpacity={isLegal ? 0.65 : 0.9}
+      >
+        {isCommitted && <Text style={styles.cardTileCommittedBadge}>PLAYED</Text>}
+        <Text style={[styles.cardGlyph, { color: isSelected ? accentColor : COLORS.muted }]}>{glyph}</Text>
+        <Text style={styles.cardName} numberOfLines={2}>{card.nameHe}</Text>
+        <Text style={styles.cardNamePt} numberOfLines={1}>{card.namePt}</Text>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -1252,133 +1371,170 @@ function getPhaseLabel(
 // ─── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container:         { flex: 1, backgroundColor: COLORS.bg },
-  phaseBanner:       { backgroundColor: COLORS.primary, paddingVertical: 8, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  phaseBannerReveal: { backgroundColor: '#5C3D8F' },
-  phaseLabel:        { color: '#fff', fontWeight: '700', fontSize: 13, flex: 1 },
+  container:    { flex: 1, backgroundColor: COLORS.bg },
+
+  // ── Phase banner ──
+  phaseBanner:       { paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 3, borderBottomColor: 'rgba(0,0,0,0.18)' },
+  phaseLabel:        { color: '#fff', fontWeight: '800', fontSize: 13, flex: 1, letterSpacing: 0.5 },
   cheatSheetButton:  { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginHorizontal: 8 },
   cheatSheetButtonText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  roundLabel:        { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginLeft: 8 },
-  reshuffleBanner:   { backgroundColor: '#E8F8F8', borderBottomWidth: 1, borderBottomColor: '#B8E2E2', paddingVertical: 8, paddingHorizontal: 16 },
+  roundLabel:        { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '700' },
+  reshuffleBanner:   { backgroundColor: '#E3F5F5', borderBottomWidth: 1, borderBottomColor: '#A8D8D8', paddingVertical: 7, paddingHorizontal: 16 },
   reshuffleBannerText: { color: '#146C6C', fontSize: 12, fontWeight: '800', textAlign: 'center', letterSpacing: 0.3 },
-  cheatSheetOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(44,26,14,0.42)', justifyContent: 'center', padding: 16 },
-  cheatSheetCard:    { backgroundColor: COLORS.surface, borderRadius: 24, padding: 16, borderWidth: 1.5, borderColor: COLORS.border, gap: 12 },
+
+  // ── Cheat sheet overlay ──
+  cheatSheetOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(44,26,14,0.62)', justifyContent: 'center', padding: 16 },
+  cheatSheetCard:    { backgroundColor: COLORS.surface, borderRadius: 24, padding: 16, borderWidth: 2, borderColor: COLORS.border, gap: 12 },
   cheatSheetHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cheatSheetTitle:   { color: COLORS.text, fontSize: 18, fontWeight: '900' },
   cheatSheetClose:   { color: COLORS.primary, fontSize: 12, fontWeight: '900', letterSpacing: 0.8 },
   cheatSheetGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 1, backgroundColor: COLORS.border, padding: 1, borderRadius: 14, overflow: 'hidden' },
-  cheatCell:         { width: '24.6%', minHeight: 52, backgroundColor: COLORS.card, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
-  cheatCellHeader:   { backgroundColor: '#B47ABB' },
-  cheatCellSide:     { backgroundColor: '#7E90D2' },
+  cheatCell:         { width: '24.6%', minHeight: 52, backgroundColor: COLORS.card, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
+  cheatCellHeader:   { backgroundColor: COLORS.leather },
+  cheatCellSide:     { backgroundColor: COLORS.ember },
   cheatCellDanger:   { backgroundColor: '#F7D8D4' },
-  cheatCellInfo:     { backgroundColor: '#DBE5FB' },
-  cheatCellNeutral:  { backgroundColor: '#ECE7DE' },
-  cheatCellText:     { color: COLORS.text, fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  cheatCellInfo:     { backgroundColor: '#DFF0E8' },
+  cheatCellNeutral:  { backgroundColor: '#EDE7DA' },
+  cheatCellText:     { color: COLORS.text, fontSize: 11, fontWeight: '700', textAlign: 'center' },
   cheatCellTextStrong: { color: '#fff', fontWeight: '900' },
-  cheatSheetNotes:   { gap: 6, backgroundColor: '#FFF8EA', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#EBCB97' },
+  cheatSheetNotes:   { gap: 6, backgroundColor: '#FFF8EA', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: COLORS.border },
   cheatSheetNote:    { color: COLORS.text, fontSize: 12, lineHeight: 18 },
 
-  opponentsRow:     { maxHeight: 110, marginVertical: 8 },
-  opponentsContent: { paddingHorizontal: 12, gap: 8 },
-  opponentSlot:     { backgroundColor: COLORS.card, borderRadius: 10, padding: 10, minWidth: 90, alignItems: 'center', borderWidth: 1.5, borderColor: COLORS.border },
-  opponentAttacker: { borderColor: COLORS.primary },
-  opponentDefender: { borderColor: COLORS.accent },
-  opponentTargeted: { borderColor: COLORS.danger, borderWidth: 2.5 },
-  opponentName:     { fontWeight: '700', fontSize: 12, color: COLORS.text, maxWidth: 80 },
-  opponentCards:    { fontSize: 11, color: COLORS.muted, marginTop: 2 },
+  // ── Opponents row ──
+  opponentsRow:     { maxHeight: 130, marginVertical: 6 },
+  opponentsContent: { paddingHorizontal: 12, gap: 8, alignItems: 'center' },
+  opponentSlot:     { backgroundColor: COLORS.surface, borderRadius: 12, padding: 10, minWidth: 94, alignItems: 'center', borderWidth: 2, borderColor: COLORS.border,
+    shadowColor: COLORS.leather, shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  opponentAttacker: { borderColor: COLORS.primary, shadowColor: COLORS.primary, shadowOpacity: 0.25, elevation: 3 },
+  opponentDefender: { borderColor: COLORS.accent, shadowColor: COLORS.accent, shadowOpacity: 0.25, elevation: 3 },
+  opponentTargeted: { borderColor: COLORS.danger, borderWidth: 2.5, shadowColor: COLORS.danger, shadowOpacity: 0.3, elevation: 4 },
+  opponentName:     { fontWeight: '800', fontSize: 12, color: COLORS.text, maxWidth: 84, textAlign: 'center' },
+  opponentCardFan:  { flexDirection: 'row', marginTop: 5, justifyContent: 'center' },
+  opponentCardMini: { width: 9, height: 13, borderRadius: 2, backgroundColor: COLORS.leather, borderWidth: 1, borderColor: COLORS.border },
+  opponentCardMiniOverlap: { marginLeft: -4 },
   disconnected:     { fontSize: 9, color: COLORS.muted, marginTop: 2 },
 
+  // ── Clash zone ──
   clashScroll:  { flex: 1 },
   clashZone:    { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
-  clashRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  clashRow:     { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  clashStage:   { position: 'absolute', width: '88%', height: 160, borderRadius: 20, backgroundColor: 'rgba(61,34,16,0.06)', borderWidth: 1.5, borderColor: 'rgba(196,169,125,0.35)' },
 
   clashSlot:             { alignItems: 'center', gap: 6 },
-  clashSlotName:         { fontSize: 11, fontWeight: '700', color: COLORS.muted, maxWidth: 90, textAlign: 'center' },
-  clashCard:             { width: 80, height: 108, borderRadius: 10, borderWidth: 2, borderColor: COLORS.border, backgroundColor: COLORS.card, justifyContent: 'center', alignItems: 'center' },
-  clashCardIcon:         { fontSize: 28 },
-  clashCardReady:        { fontSize: 11, fontWeight: '800', marginTop: 4 },
-  clashCardEmpty:        { fontSize: 28, color: COLORS.border },
-  clashCardRevealedName: { fontSize: 13, fontWeight: '800', textAlign: 'center', paddingHorizontal: 4 },
+  clashSlotRole:         { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
+  clashSlotRoleAttacker: { backgroundColor: COLORS.primary, color: '#fff' },
+  clashSlotRoleDefender: { backgroundColor: COLORS.accent, color: '#fff' },
+  clashCard:             { width: 88, height: 122, borderRadius: 12, borderWidth: 2, borderColor: COLORS.border, backgroundColor: COLORS.surface, justifyContent: 'center', alignItems: 'center',
+    shadowColor: COLORS.leather, shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 2 },
+  clashCardBack:         { backgroundColor: COLORS.leather, borderColor: COLORS.leather },
+  clashCardBackPattern:  { width: 56, height: 80, borderRadius: 6, borderWidth: 2, borderColor: 'rgba(196,169,125,0.4)', justifyContent: 'center', alignItems: 'center' },
+  clashCardBackDiamond:  { fontSize: 28, color: 'rgba(196,169,125,0.5)' },
+  clashCardIcon:         { fontSize: 24 },
+  clashCardReady:        { fontSize: 10, fontWeight: '800', marginTop: 4 },
+  clashCardEmpty:        { fontSize: 32, color: COLORS.sand },
+  clashCardRevealedName: { fontSize: 14, fontWeight: '800', textAlign: 'center', paddingHorizontal: 6 },
+  clashCardRevealedGlyph:{ fontSize: 22, marginBottom: 4 },
 
-  vsContainer:    { alignItems: 'center', gap: 8 },
-  vsText:         { fontSize: 16, fontWeight: '900', color: COLORS.muted },
-  deckBadge:      { alignItems: 'center' },
-  deckBadgeText:  { fontSize: 16, fontWeight: '800', color: COLORS.text },
-  deckBadgeLabel: { fontSize: 9, color: COLORS.muted, fontWeight: '600' },
+  vsContainer:    { alignItems: 'center', gap: 6 },
+  vsText:         { fontSize: 20, fontWeight: '900', color: COLORS.ember, letterSpacing: 1 },
+  deckBadge:      { alignItems: 'center', backgroundColor: 'rgba(61,34,16,0.07)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  deckBadgeText:  { fontSize: 15, fontWeight: '800', color: COLORS.text },
+  deckBadgeLabel: { fontSize: 8, color: COLORS.muted, fontWeight: '700', letterSpacing: 0.5 },
 
-  resultBanner: { borderWidth: 1.5, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 16, alignItems: 'center', backgroundColor: COLORS.card, gap: 4, width: '100%' },
-  resultLine:   { fontSize: 15, fontWeight: '800', textAlign: 'center' },
+  resultBanner: { borderWidth: 2, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 18, alignItems: 'center', backgroundColor: COLORS.surface, gap: 4, width: '100%',
+    shadowColor: COLORS.leather, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2 },
+  resultLine:   { fontSize: 16, fontWeight: '800', textAlign: 'center' },
 
-  continueButton:     { backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 28 },
-  continueButtonText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  continueButton:     { backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 32, borderBottomWidth: 3, borderBottomColor: COLORS.ember },
+  continueButtonText: { color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
   waitingReveal:      { fontSize: 12, color: COLORS.muted, fontStyle: 'italic' },
 
-  // Special action panels
-  specialTrigger:      { backgroundColor: '#4A90D9', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 20, width: '100%', alignItems: 'center' },
-  specialTriggerCompra:{ backgroundColor: '#7B52AB' },
-  specialTriggerText:  { color: '#fff', fontWeight: '800', fontSize: 12 },
+  // ── Special action panels ──
+  specialTrigger:       { backgroundColor: COLORS.primary, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 20, width: '100%', alignItems: 'center', borderBottomWidth: 3, borderBottomColor: COLORS.ember },
+  specialTriggerCompra: { backgroundColor: COLORS.gold, borderBottomColor: '#9A7020' },
+  specialTriggerText:   { color: '#fff', fontWeight: '800', fontSize: 12 },
 
-  specialPanel:       { backgroundColor: COLORS.card, borderRadius: 14, padding: 14, width: '100%', gap: 10, borderWidth: 1.5, borderColor: COLORS.border },
+  specialPanel:       { backgroundColor: COLORS.surface, borderRadius: 16, padding: 14, width: '100%', gap: 10, borderWidth: 2, borderColor: COLORS.border },
   specialPanelTitle:  { fontWeight: '700', fontSize: 13, color: COLORS.text },
   specialActions:     { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  specialConfirm:     { backgroundColor: COLORS.danger, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, flex: 1, alignItems: 'center' },
-  specialConfirmDisabled: { backgroundColor: COLORS.muted },
+  specialConfirm:     { backgroundColor: COLORS.danger, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, flex: 1, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: '#8B1F1A' },
+  specialConfirmDisabled: { backgroundColor: COLORS.muted, borderBottomColor: '#7A6A60' },
   specialConfirmText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   specialCancel:      { paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center' },
   specialCancelText:  { color: COLORS.muted, fontWeight: '600', fontSize: 12 },
 
+  // ── Idle zone (deck / discard stacks) ──
   idleZone:        { flexDirection: 'row', gap: 40, alignItems: 'center' },
-  deckPile:        { alignItems: 'center' },
-  discardPileIdle: { alignItems: 'center' },
-  deckLabel:       { fontSize: 10, color: COLORS.muted, fontWeight: '600' },
+  deckPile:        { alignItems: 'center', gap: 4 },
+  discardPileIdle: { alignItems: 'center', gap: 4 },
+  deckStack:       { width: 52, height: 72, borderRadius: 8, backgroundColor: COLORS.leather, borderWidth: 2, borderColor: COLORS.border, justifyContent: 'center', alignItems: 'center',
+    shadowColor: COLORS.leather, shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 2, height: 3 }, elevation: 3 },
+  deckStackEmpty:  { backgroundColor: 'transparent', borderStyle: 'dashed', shadowOpacity: 0 },
+  deckStackCount:  { color: COLORS.sand, fontWeight: '900', fontSize: 18 },
+  deckLabel:       { fontSize: 9, color: COLORS.muted, fontWeight: '700', letterSpacing: 1 },
   deckCount:       { fontSize: 22, fontWeight: '800', color: COLORS.text },
 
-  localPlayerArea: { backgroundColor: COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 12, paddingHorizontal: 12, paddingBottom: 8 },
-  localHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  localName:       { fontWeight: '700', fontSize: 14, color: COLORS.text },
-  handRow:         { gap: 8, paddingVertical: 8 },
+  // ── Local player area ──
+  localPlayerArea: { backgroundColor: COLORS.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 12, paddingHorizontal: 12, paddingBottom: 8,
+    shadowColor: COLORS.leather, shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: -4 }, elevation: 6 },
+  localHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  localName:       { fontWeight: '800', fontSize: 14, color: COLORS.text },
+  handRow:         { gap: 8, paddingTop: 18, paddingBottom: 8, paddingLeft: 4, paddingRight: 16 },
   floreoHint:      { color: COLORS.accent, fontSize: 12, fontWeight: '700', marginTop: -2, marginBottom: 4 },
 
-  cardTile:         { backgroundColor: COLORS.card, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 8, alignItems: 'center', minWidth: 60, borderWidth: 1.5, borderColor: COLORS.border },
-  cardTileSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
-  cardTileCommitted:{ borderColor: COLORS.primary, backgroundColor: '#FCE6D6', shadowColor: COLORS.primary, shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  cardTileCommittedBadge: { fontSize: 8, color: COLORS.primary, fontWeight: '900', marginBottom: 3, letterSpacing: 0.8 },
-  cardTileIllegal:  { opacity: 0.4 },
-  cardSubtype:      { fontSize: 9, color: COLORS.muted, fontWeight: '700', marginBottom: 2 },
-  cardName:         { fontSize: 11, fontWeight: '700', color: COLORS.text, textAlign: 'center', maxWidth: 60 },
+  // ── Card tiles ──
+  cardTile:         { backgroundColor: COLORS.card, borderRadius: 11, paddingTop: 8, paddingBottom: 9, paddingHorizontal: 7, alignItems: 'center', width: 68,
+    borderWidth: 1.5, borderColor: COLORS.border, borderLeftWidth: 4,
+    shadowColor: COLORS.leather, shadowOpacity: 0.08, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  cardTileLegal:    { shadowColor: COLORS.gold, shadowOpacity: 0.45, shadowRadius: 7, elevation: 3 },
+  cardTileSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight, shadowColor: COLORS.primary, shadowOpacity: 0.35, shadowRadius: 10, elevation: 4 },
+  cardTileCommitted:{ borderColor: COLORS.primary, backgroundColor: '#FCE6D6', shadowColor: COLORS.primary, shadowOpacity: 0.22, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+  cardTileCommittedBadge: { fontSize: 7, color: COLORS.primary, fontWeight: '900', marginBottom: 2, letterSpacing: 1 },
+  cardTileIllegal:  { opacity: 0.28 },
+  cardGlyph:        { fontSize: 18, marginBottom: 4 },
+  cardName:         { fontSize: 12, fontWeight: '700', color: COLORS.text, textAlign: 'center', maxWidth: 58 },
+  cardNamePt:       { fontSize: 9, color: COLORS.muted, fontWeight: '600', textAlign: 'center', marginTop: 2 },
 
-  maculeleRow:      { flexDirection: 'row', gap: 4, marginTop: 4, justifyContent: 'center' },
-  maculeleDot:      { width: 12, height: 12, borderRadius: 6 },
-  maculeleSmall:    { width: 7, height: 7, borderRadius: 4 },
+  // ── Maculelê tokens ──
+  maculeleRow:      { flexDirection: 'row', gap: 3, marginTop: 5, justifyContent: 'center' },
+  maculeleDot:      { width: 13, height: 13, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(0,0,0,0.12)' },
+  maculeleSmall:    { width: 9, height: 9, borderRadius: 3, borderWidth: 1, borderColor: 'rgba(0,0,0,0.10)' },
   maculeleActive:   { backgroundColor: COLORS.danger },
-  maculeleInactive: { backgroundColor: COLORS.border },
+  maculeleDanger:   { backgroundColor: COLORS.coral },
+  maculeleInactive: { backgroundColor: COLORS.sand, borderColor: 'rgba(0,0,0,0.06)' },
 
-  attackButton:         { backgroundColor: COLORS.danger, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  attackButtonDisabled: { backgroundColor: COLORS.muted },
+  // ── Action buttons ──
+  attackButton:         { backgroundColor: COLORS.danger, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderBottomWidth: 3, borderBottomColor: '#8B1F1A' },
+  attackButtonDisabled: { backgroundColor: COLORS.muted, borderBottomColor: '#7A6A60' },
   attackButtonText:     { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 },
 
-  specialButton:     { backgroundColor: COLORS.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
+  specialButton:     { backgroundColor: COLORS.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderBottomWidth: 3, borderBottomColor: '#258A8A' },
   specialButtonText: { color: '#fff', fontWeight: '800', fontSize: 13 },
 
-  playButton:         { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8 },
-  playButtonDisabled: { backgroundColor: COLORS.muted },
+  playButton:         { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderBottomWidth: 3, borderBottomColor: COLORS.ember },
+  playButtonDisabled: { backgroundColor: COLORS.muted, borderBottomColor: '#7A6A60' },
   playButtonText:     { color: '#fff', fontWeight: '800', fontSize: 14 },
 
-  emptyHandBox:        { backgroundColor: '#FDE8E8', borderRadius: 14, padding: 14, marginTop: 8, borderWidth: 1.5, borderColor: COLORS.danger, gap: 6 },
+  // ── Empty hand / eliminated / burn reveal ──
+  emptyHandBox:        { backgroundColor: '#FDE8E8', borderRadius: 14, padding: 14, marginTop: 8, borderWidth: 2, borderColor: COLORS.danger, gap: 6 },
   emptyHandTitle:      { color: COLORS.danger, fontWeight: '800', fontSize: 14 },
   emptyHandSub:        { color: COLORS.danger, fontSize: 12, opacity: 0.8 },
-  emptyHandButton:     { backgroundColor: COLORS.danger, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
+  emptyHandButton:     { backgroundColor: COLORS.danger, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 4, borderBottomWidth: 3, borderBottomColor: '#8B1F1A' },
   emptyHandButtonText: { color: '#fff', fontWeight: '800', fontSize: 13 },
 
   eliminatedBox:   { backgroundColor: '#F1E6D4', borderRadius: 14, padding: 14, marginTop: 8, borderWidth: 1.5, borderColor: COLORS.border, gap: 6 },
   eliminatedTitle: { color: COLORS.text, fontWeight: '800', fontSize: 14 },
   eliminatedSub:   { color: COLORS.muted, fontSize: 12, lineHeight: 18 },
 
-  burnRevealZone:  { padding: 16, backgroundColor: COLORS.card, borderRadius: 16, borderWidth: 2, borderColor: COLORS.danger, gap: 8 },
-  burnRevealTitle: { fontSize: 13, fontWeight: '800', color: COLORS.danger, letterSpacing: 1.5, textAlign: 'center' },
+  burnRevealZone:  { padding: 16, backgroundColor: COLORS.surface, borderRadius: 18, borderWidth: 2, borderColor: COLORS.danger, gap: 8,
+    shadowColor: COLORS.danger, shadowOpacity: 0.15, shadowRadius: 10, elevation: 3 },
+  burnRevealTitle: { fontSize: 14, fontWeight: '900', color: COLORS.danger, letterSpacing: 2, textAlign: 'center' },
   burnRevealSub:   { fontSize: 12, color: COLORS.muted, textAlign: 'center' },
+  juremaRevealZone:  { borderColor: COLORS.gold, shadowColor: COLORS.gold },
+  juremaRevealTitle: { fontSize: 15, fontWeight: '900', color: COLORS.gold, letterSpacing: 2, textAlign: 'center' },
 
-  opponentSlotEliminated: { width: 80, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.card, borderRadius: 12, padding: 8, opacity: 0.4, borderWidth: 1, borderColor: COLORS.border },
-  opponentNameEliminated: { fontSize: 12, fontWeight: '600', color: COLORS.muted, textAlign: 'center' },
-  spectatorLabel:         { fontSize: 9, fontWeight: '700', color: COLORS.muted, letterSpacing: 1, marginTop: 4 },
+  // ── Opponent eliminated slots ──
+  opponentSlotEliminated: { width: 82, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, borderRadius: 12, padding: 8, opacity: 0.32, borderWidth: 1.5, borderColor: COLORS.sand },
+  opponentNameEliminated: { fontSize: 11, fontWeight: '700', color: COLORS.muted, textAlign: 'center' },
+  spectatorLabel:         { fontSize: 8, fontWeight: '900', color: COLORS.muted, letterSpacing: 2, marginTop: 3 },
 });
