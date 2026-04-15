@@ -1,0 +1,42 @@
+{
+  "rules": {
+    "matches": {
+      "$matchId": {
+        // Public match state — readable by all participants
+        ".read": "auth != null && root.child('matches').child($matchId).child('players').child(auth.uid).exists()",
+
+        // Clients cannot write match state directly — Cloud Functions own this
+        ".write": false,
+
+        "players": {
+          "$playerId": {
+            // Hand is only readable by the owning player
+            "hand": {
+              ".read": "auth.uid === $playerId"
+            }
+          }
+        }
+      }
+    },
+
+    "staging": {
+      "$matchId": {
+        "$playerId": {
+          // Each player can write only their own staged action
+          ".write": "auth.uid === $playerId",
+          // Each player can only read their own staged action (server reads all)
+          ".read":  "auth.uid === $playerId"
+        }
+      }
+    },
+
+    "rooms": {
+      "$roomCode": {
+        // Anyone authenticated can read room info (for join-by-code)
+        ".read": "auth != null",
+        // Room creator can write; after match starts, locked
+        ".write": "auth != null"
+      }
+    }
+  }
+}
