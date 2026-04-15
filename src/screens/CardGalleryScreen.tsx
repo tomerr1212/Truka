@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CARD_MAP } from '../store/gameStore';
 import { Card, CardType } from '../types';
-import { COLORS } from '../constants/theme';
+import { COLORS, FONTS } from '../constants/theme';
 
 // Deduplicated card list (one entry per subtype)
 const UNIQUE_CARDS: Card[] = Array.from(
@@ -109,30 +109,30 @@ export default function CardGalleryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  title:     { fontSize: 13, fontWeight: '700', color: COLORS.muted, letterSpacing: 3, textAlign: 'center', marginTop: 16, marginBottom: 12 },
+  title:     { fontFamily: FONTS.display, fontSize: 22, color: COLORS.text, letterSpacing: 3, textAlign: 'center', marginTop: 16, marginBottom: 12 },
 
   filters:         { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 12 },
   filterTab:       { flex: 1, paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.card, alignItems: 'center', borderWidth: 1.5, borderColor: COLORS.border },
   filterTabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  filterText:      { fontSize: 10, fontWeight: '700', color: COLORS.muted, letterSpacing: 1 },
+  filterText:      { fontFamily: FONTS.bodyExtraBold, fontSize: 10, color: COLORS.muted, letterSpacing: 1 },
   filterTextActive: { color: '#fff' },
 
   grid: { paddingHorizontal: 12, paddingBottom: 32 },
   row:  { gap: 12, marginBottom: 12 },
   card: { flex: 1, backgroundColor: COLORS.card, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: COLORS.border, minHeight: 110 },
   cardTypeBadge:     { alignSelf: 'flex-start', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginBottom: 8 },
-  cardTypeBadgeText: { fontSize: 9, fontWeight: '700', color: '#fff', letterSpacing: 1 },
-  cardNameHe: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  cardNamePt: { fontSize: 11, color: COLORS.muted, marginTop: 2 },
+  cardTypeBadgeText: { fontFamily: FONTS.bodyExtraBold, fontSize: 9, color: '#fff', letterSpacing: 1 },
+  cardNameHe: { fontFamily: FONTS.bodyBold, fontSize: 18, color: COLORS.text },
+  cardNamePt: { fontFamily: FONTS.bodySemiBold, fontSize: 11, color: COLORS.muted, marginTop: 2 },
 
-  modalOverlay:  { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent:  { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '70%' },
+  modalOverlay:  { flex: 1, backgroundColor: 'rgba(44,26,14,0.68)', justifyContent: 'flex-end' },
+  modalContent:  { backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '70%', borderTopWidth: 2, borderColor: COLORS.border },
   modalTypeBadge:     { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 12 },
-  modalTypeBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff', letterSpacing: 1.5 },
-  modalNameHe:   { fontSize: 32, fontWeight: '900', color: COLORS.text },
-  modalNamePt:   { fontSize: 16, color: COLORS.muted, marginTop: 4 },
+  modalTypeBadgeText: { fontFamily: FONTS.bodyExtraBold, fontSize: 10, color: '#fff', letterSpacing: 1.5 },
+  modalNameHe:   { fontFamily: FONTS.display, fontSize: 38, color: COLORS.text },
+  modalNamePt:   { fontFamily: FONTS.bodySemiBold, fontSize: 16, color: COLORS.muted, marginTop: 4 },
   modalDivider:  { height: 1, backgroundColor: COLORS.border, marginVertical: 16 },
-  modalDesc:     { fontSize: 15, color: COLORS.text, lineHeight: 24 },
-  modalClose:    { marginTop: 20, backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-  modalCloseText: { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 1 },
+  modalDesc:     { fontFamily: FONTS.bodyRegular, fontSize: 15, color: COLORS.text, lineHeight: 24 },
+  modalClose:    { marginTop: 20, backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: COLORS.ember },
+  modalCloseText: { fontFamily: FONTS.bodyExtraBold, color: '#fff', fontSize: 14, letterSpacing: 1 },
 });

@@ -14,7 +14,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useGameStore } from '../store/gameStore';
 import { signInAnon } from '../services/firebase';
 import { createRoom, joinRoom } from '../services/matchService';
-import { COLORS } from '../constants/theme';
+import { COLORS, FONTS } from '../constants/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -168,23 +168,23 @@ const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: COLORS.bg },
   inner:       { flex: 1, justifyContent: 'space-between', padding: 24 },
   hero:        { alignItems: 'center', paddingTop: 32 },
-  title:       { fontSize: 64, fontWeight: '900', color: COLORS.primary, lineHeight: 64 },
-  subtitle:    { fontSize: 28, fontWeight: '800', color: COLORS.text, letterSpacing: 8 },
-  tagline:     { fontSize: 14, color: COLORS.muted, marginTop: 8 },
-  authWaiting: { fontSize: 12, color: COLORS.muted, marginTop: 8 },
+  title:       { fontFamily: FONTS.display, fontSize: 72, color: COLORS.primary, lineHeight: 72 },
+  subtitle:    { fontFamily: FONTS.display, fontSize: 28, color: COLORS.text, letterSpacing: 8 },
+  tagline:     { fontFamily: FONTS.bodySemiBold, fontSize: 14, color: COLORS.muted, marginTop: 8 },
+  authWaiting: { fontFamily: FONTS.bodyRegular, fontSize: 12, color: COLORS.muted, marginTop: 8 },
 
   form:      { gap: 12 },
-  label:     { fontSize: 11, fontWeight: '700', color: COLORS.muted, letterSpacing: 1.5 },
-  input:     { backgroundColor: COLORS.card, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, paddingVertical: 14, paddingHorizontal: 16, fontSize: 16, color: COLORS.text },
-  codeInput: { textAlign: 'center', letterSpacing: 6, fontWeight: '800', fontSize: 20 },
+  label:     { fontFamily: FONTS.bodyExtraBold, fontSize: 11, color: COLORS.muted, letterSpacing: 1.5 },
+  input:     { fontFamily: FONTS.bodyRegular, backgroundColor: COLORS.card, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, paddingVertical: 14, paddingHorizontal: 16, fontSize: 16, color: COLORS.text },
+  codeInput: { fontFamily: FONTS.display, textAlign: 'center', letterSpacing: 6, fontSize: 24 },
 
   errorBox:  { backgroundColor: '#FDE8E8', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#F5C6C6' },
-  errorText: { color: '#C0392B', fontWeight: '600', fontSize: 13, textAlign: 'center' },
+  errorText: { fontFamily: FONTS.bodySemiBold, color: '#C0392B', fontSize: 13, textAlign: 'center' },
 
-  primaryButton:     { backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
-  primaryButtonText: { color: '#fff', fontWeight: '800', fontSize: 16, letterSpacing: 1 },
+  primaryButton:     { backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: COLORS.ember },
+  primaryButtonText: { color: '#fff', fontFamily: FONTS.bodyExtraBold, fontSize: 16, letterSpacing: 1 },
   secondaryButton:     { backgroundColor: 'transparent', borderRadius: 16, paddingVertical: 14, alignItems: 'center', borderWidth: 2, borderColor: COLORS.primary },
-  secondaryButtonText: { color: COLORS.primary, fontWeight: '800', fontSize: 16, letterSpacing: 1 },
+  secondaryButtonText: { color: COLORS.primary, fontFamily: FONTS.bodyExtraBold, fontSize: 16, letterSpacing: 1 },
   buttonDisabled:      { opacity: 0.45 },
 
   divider:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -192,6 +192,6 @@ const styles = StyleSheet.create({
   dividerText: { color: COLORS.muted, fontSize: 12 },
 
   footer:     { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, paddingBottom: 8 },
-  footerLink: { fontSize: 11, fontWeight: '700', color: COLORS.muted, letterSpacing: 1.5 },
+  footerLink: { fontFamily: FONTS.bodyBold, fontSize: 11, color: COLORS.muted, letterSpacing: 1.5 },
   footerSep:  { color: COLORS.border },
 });

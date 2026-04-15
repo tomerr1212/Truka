@@ -29,3 +29,13 @@ export const FONT = {
   body:    { fontWeight: '400' as const },
   label:   { fontWeight: '600' as const, letterSpacing: 0.5, textTransform: 'uppercase' as const },
 };
+
+// Loaded via expo-font in App.tsx
+export const FONTS = {
+  display:       'BebasNeue_400Regular',   // phase titles, VS, results, CTAs
+  bodyRegular:   'Inter_400Regular',
+  bodySemiBold:  'Inter_600SemiBold',
+  bodyBold:      'Inter_700Bold',
+  bodyExtraBold: 'Inter_800ExtraBold',
+  bodyBlack:     'Inter_900Black',
+};

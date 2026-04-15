@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -37,7 +38,7 @@ import { resolveClash, FloreoState } from '../engine/collision';
 import { applyMaculeleChanges, eliminatePlayer, findJuremaCard, applyJurema, getNextAttackerId, getWinner } from '../engine/maculele';
 import { getDrawCount, drawCards } from '../engine/replenishment';
 
-import { COLORS } from '../constants/theme';
+import { COLORS, FONTS } from '../constants/theme';
 import { buildCardDefinitions } from '../constants/deck';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'GameTable'>;
@@ -758,6 +759,13 @@ export default function GameTableScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Arena floor gradient */}
+      <LinearGradient
+        colors={['#F5EDD8', '#EDE0C4', '#E8D8B8']}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       {/* Phase banner */}
       <View style={[styles.phaseBanner, { backgroundColor: getPhaseBannerColor(phase) }]}>
         <Text style={styles.phaseLabel} numberOfLines={1}>{phaseLabel}</Text>
@@ -799,6 +807,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
                 label={attackerName} hasStaged={attackerHasStaged} isLocal={isAttacker} role="attacker"
                 cardName={attackerCardName}
                 cardSubtype={attackerStagedCard ? CARD_MAP.get(attackerStagedCard.actionCardId)?.subtype : null}
+                flipDelay={0}
               />
               <View style={styles.vsContainer}>
                 <Text style={styles.vsText}>VS</Text>
@@ -811,6 +820,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
                 label={defenderName ?? '?'} hasStaged={defenderHasStaged} isLocal={isDefender} role="defender"
                 cardName={defenderCardName}
                 cardSubtype={defenderStagedCard ? CARD_MAP.get(defenderStagedCard.actionCardId)?.subtype : null}
+                flipDelay={80}
               />
             </View>
 
@@ -963,6 +973,8 @@ export default function GameTableScreen({ route, navigation }: Props) {
           </Animated.View>
         ) : (
           <View style={styles.idleZone}>
+            {/* Arena floor center glow */}
+            <View style={styles.arenaGlow} pointerEvents="none" />
             <View style={styles.deckPile}>
               <View style={[styles.deckStack, (match?.deck.length ?? 0) === 0 && styles.deckStackEmpty]}>
                 <Text style={styles.deckStackCount}>{match?.deck.length ?? 0}</Text>
@@ -1166,26 +1178,68 @@ export default function GameTableScreen({ route, navigation }: Props) {
 
 // ─── ClashSlot ─────────────────────────────────────────────────────────────────
 
-function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype }: {
+function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype, flipDelay = 0 }: {
   label: string; hasStaged: boolean; isLocal: boolean;
   role: 'attacker' | 'defender'; cardName: string | null; cardSubtype?: string | null;
+  flipDelay?: number;
 }) {
-  const roleColor  = role === 'attacker' ? COLORS.primary : COLORS.accent;
-  const roleBg     = role === 'attacker' ? COLORS.primaryLight : '#E0F5F5';
-  const roleLabel  = role === 'attacker' ? 'ATTACKER' : 'DEFENDER';
-  const faceDown   = hasStaged && !cardName;
+  const roleColor = role === 'attacker' ? COLORS.primary : COLORS.accent;
+  const roleBg    = role === 'attacker' ? COLORS.primaryLight : '#E0F5F5';
+  const roleLabel = role === 'attacker' ? 'ATTACKER' : 'DEFENDER';
+
+  // Flip animation: scaleX 1→0 (fold away), swap content, 0→1 (unfold front)
+  const flipScale = useSharedValue(1);
+  const [showFront, setShowFront] = useState(!!cardName);
+  const prevCardName = useRef<string | null>(cardName);
+
+  useEffect(() => {
+    const wasRevealed = !!prevCardName.current;
+    prevCardName.current = cardName;
+
+    if (cardName && !wasRevealed) {
+      // Card just revealed — play flip after optional delay
+      const doFlip = () => {
+        setShowFront(false);
+        flipScale.value = 1;
+        flipScale.value = withSequence(
+          withTiming(0, { duration: 190 }),
+          withTiming(1, { duration: 190 }),
+        );
+        setTimeout(() => setShowFront(true), 190);
+      };
+      if (flipDelay > 0) {
+        const t = setTimeout(doFlip, flipDelay);
+        return () => clearTimeout(t);
+      }
+      doFlip();
+    } else if (!cardName) {
+      setShowFront(false);
+      flipScale.value = 1;
+    } else {
+      // Already revealed on mount (reconnect)
+      setShowFront(true);
+    }
+  }, [cardName]);
+
+  const flipStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: flipScale.value }],
+  }));
+
+  const faceDown = hasStaged && !cardName;
+
   return (
     <View style={styles.clashSlot}>
       <Text style={[styles.clashSlotRole, role === 'attacker' ? styles.clashSlotRoleAttacker : styles.clashSlotRoleDefender]}>
         {roleLabel}
       </Text>
-      <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.muted, maxWidth: 90, textAlign: 'center' }} numberOfLines={1}>{label}</Text>
-      <View style={[
+      <Text style={{ fontFamily: FONTS.bodyBold, fontSize: 11, color: COLORS.muted, maxWidth: 90, textAlign: 'center' }} numberOfLines={1}>{label}</Text>
+      <Animated.View style={[
         styles.clashCard,
-        faceDown && styles.clashCardBack,
-        cardName && { borderColor: roleColor, backgroundColor: roleBg, borderWidth: 2.5 },
+        !showFront && faceDown && styles.clashCardBack,
+        showFront && cardName ? { borderColor: roleColor, backgroundColor: roleBg, borderWidth: 2.5 } : undefined,
+        flipStyle,
       ]}>
-        {cardName ? (
+        {showFront && cardName ? (
           <>
             {cardSubtype && <Text style={[styles.clashCardRevealedGlyph, { color: roleColor }]}>{SUBTYPE_GLYPH[cardSubtype] ?? '▪'}</Text>}
             <Text style={[styles.clashCardRevealedName, { color: roleColor }]} numberOfLines={2}>{cardName}</Text>
@@ -1197,8 +1251,8 @@ function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype }: {
         ) : (
           <Text style={styles.clashCardEmpty}>?</Text>
         )}
-      </View>
-      {faceDown && (
+      </Animated.View>
+      {faceDown && !showFront && (
         <Text style={[styles.clashCardReady, { color: roleColor }]}>{isLocal ? 'Placed ✓' : 'Waiting…'}</Text>
       )}
     </View>
@@ -1375,10 +1429,10 @@ const styles = StyleSheet.create({
 
   // ── Phase banner ──
   phaseBanner:       { paddingVertical: 10, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 3, borderBottomColor: 'rgba(0,0,0,0.18)' },
-  phaseLabel:        { color: '#fff', fontWeight: '800', fontSize: 13, flex: 1, letterSpacing: 0.5 },
+  phaseLabel:        { color: '#fff', fontFamily: FONTS.display, fontSize: 18, flex: 1, letterSpacing: 1 },
   cheatSheetButton:  { backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginHorizontal: 8 },
-  cheatSheetButtonText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  roundLabel:        { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '700' },
+  cheatSheetButtonText: { color: '#fff', fontFamily: FONTS.bodyExtraBold, fontSize: 10, letterSpacing: 0.8 },
+  roundLabel:        { color: 'rgba(255,255,255,0.75)', fontFamily: FONTS.bodySemiBold, fontSize: 11 },
   reshuffleBanner:   { backgroundColor: '#E3F5F5', borderBottomWidth: 1, borderBottomColor: '#A8D8D8', paddingVertical: 7, paddingHorizontal: 16 },
   reshuffleBannerText: { color: '#146C6C', fontSize: 12, fontWeight: '800', textAlign: 'center', letterSpacing: 0.3 },
 
@@ -1386,7 +1440,7 @@ const styles = StyleSheet.create({
   cheatSheetOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(44,26,14,0.62)', justifyContent: 'center', padding: 16 },
   cheatSheetCard:    { backgroundColor: COLORS.surface, borderRadius: 24, padding: 16, borderWidth: 2, borderColor: COLORS.border, gap: 12 },
   cheatSheetHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cheatSheetTitle:   { color: COLORS.text, fontSize: 18, fontWeight: '900' },
+  cheatSheetTitle:   { color: COLORS.text, fontFamily: FONTS.display, fontSize: 22 },
   cheatSheetClose:   { color: COLORS.primary, fontSize: 12, fontWeight: '900', letterSpacing: 0.8 },
   cheatSheetGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 1, backgroundColor: COLORS.border, padding: 1, borderRadius: 14, overflow: 'hidden' },
   cheatCell:         { width: '24.6%', minHeight: 52, backgroundColor: COLORS.card, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
@@ -1408,7 +1462,7 @@ const styles = StyleSheet.create({
   opponentAttacker: { borderColor: COLORS.primary, shadowColor: COLORS.primary, shadowOpacity: 0.25, elevation: 3 },
   opponentDefender: { borderColor: COLORS.accent, shadowColor: COLORS.accent, shadowOpacity: 0.25, elevation: 3 },
   opponentTargeted: { borderColor: COLORS.danger, borderWidth: 2.5, shadowColor: COLORS.danger, shadowOpacity: 0.3, elevation: 4 },
-  opponentName:     { fontWeight: '800', fontSize: 12, color: COLORS.text, maxWidth: 84, textAlign: 'center' },
+  opponentName:     { fontFamily: FONTS.bodyBold, fontSize: 12, color: COLORS.text, maxWidth: 84, textAlign: 'center' },
   opponentCardFan:  { flexDirection: 'row', marginTop: 5, justifyContent: 'center' },
   opponentCardMini: { width: 9, height: 13, borderRadius: 2, backgroundColor: COLORS.leather, borderWidth: 1, borderColor: COLORS.border },
   opponentCardMiniOverlap: { marginLeft: -4 },
@@ -1436,23 +1490,23 @@ const styles = StyleSheet.create({
   clashCardRevealedGlyph:{ fontSize: 22, marginBottom: 4 },
 
   vsContainer:    { alignItems: 'center', gap: 6 },
-  vsText:         { fontSize: 20, fontWeight: '900', color: COLORS.ember, letterSpacing: 1 },
+  vsText:         { fontSize: 28, fontFamily: FONTS.display, color: COLORS.ember, letterSpacing: 2 },
   deckBadge:      { alignItems: 'center', backgroundColor: 'rgba(61,34,16,0.07)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  deckBadgeText:  { fontSize: 15, fontWeight: '800', color: COLORS.text },
-  deckBadgeLabel: { fontSize: 8, color: COLORS.muted, fontWeight: '700', letterSpacing: 0.5 },
+  deckBadgeText:  { fontSize: 15, fontFamily: FONTS.bodyBold, color: COLORS.text },
+  deckBadgeLabel: { fontSize: 8, fontFamily: FONTS.bodySemiBold, color: COLORS.muted, letterSpacing: 0.5 },
 
   resultBanner: { borderWidth: 2, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 18, alignItems: 'center', backgroundColor: COLORS.surface, gap: 4, width: '100%',
     shadowColor: COLORS.leather, shadowOpacity: 0.1, shadowRadius: 8, elevation: 2 },
-  resultLine:   { fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  resultLine:   { fontSize: 22, fontFamily: FONTS.display, textAlign: 'center', letterSpacing: 1 },
 
   continueButton:     { backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 32, borderBottomWidth: 3, borderBottomColor: COLORS.ember },
-  continueButtonText: { color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
+  continueButtonText: { color: '#fff', fontFamily: FONTS.bodyExtraBold, fontSize: 13, letterSpacing: 0.5 },
   waitingReveal:      { fontSize: 12, color: COLORS.muted, fontStyle: 'italic' },
 
   // ── Special action panels ──
   specialTrigger:       { backgroundColor: COLORS.primary, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 20, width: '100%', alignItems: 'center', borderBottomWidth: 3, borderBottomColor: COLORS.ember },
   specialTriggerCompra: { backgroundColor: COLORS.gold, borderBottomColor: '#9A7020' },
-  specialTriggerText:   { color: '#fff', fontWeight: '800', fontSize: 12 },
+  specialTriggerText:   { color: '#fff', fontFamily: FONTS.bodyExtraBold, fontSize: 12 },
 
   specialPanel:       { backgroundColor: COLORS.surface, borderRadius: 16, padding: 14, width: '100%', gap: 10, borderWidth: 2, borderColor: COLORS.border },
   specialPanelTitle:  { fontWeight: '700', fontSize: 13, color: COLORS.text },
@@ -1465,12 +1519,13 @@ const styles = StyleSheet.create({
 
   // ── Idle zone (deck / discard stacks) ──
   idleZone:        { flexDirection: 'row', gap: 40, alignItems: 'center' },
+  arenaGlow:       { position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(232,115,42,0.06)', alignSelf: 'center' },
   deckPile:        { alignItems: 'center', gap: 4 },
   discardPileIdle: { alignItems: 'center', gap: 4 },
   deckStack:       { width: 52, height: 72, borderRadius: 8, backgroundColor: COLORS.leather, borderWidth: 2, borderColor: COLORS.border, justifyContent: 'center', alignItems: 'center',
     shadowColor: COLORS.leather, shadowOpacity: 0.25, shadowRadius: 4, shadowOffset: { width: 2, height: 3 }, elevation: 3 },
   deckStackEmpty:  { backgroundColor: 'transparent', borderStyle: 'dashed', shadowOpacity: 0 },
-  deckStackCount:  { color: COLORS.sand, fontWeight: '900', fontSize: 18 },
+  deckStackCount:  { color: COLORS.sand, fontFamily: FONTS.display, fontSize: 18 },
   deckLabel:       { fontSize: 9, color: COLORS.muted, fontWeight: '700', letterSpacing: 1 },
   deckCount:       { fontSize: 22, fontWeight: '800', color: COLORS.text },
 
@@ -1478,7 +1533,7 @@ const styles = StyleSheet.create({
   localPlayerArea: { backgroundColor: COLORS.surface, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 12, paddingHorizontal: 12, paddingBottom: 8,
     shadowColor: COLORS.leather, shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: -4 }, elevation: 6 },
   localHeader:     { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  localName:       { fontWeight: '800', fontSize: 14, color: COLORS.text },
+  localName:       { fontFamily: FONTS.bodyBold, fontSize: 14, color: COLORS.text },
   handRow:         { gap: 8, paddingTop: 18, paddingBottom: 8, paddingLeft: 4, paddingRight: 16 },
   floreoHint:      { color: COLORS.accent, fontSize: 12, fontWeight: '700', marginTop: -2, marginBottom: 4 },
 
@@ -1492,8 +1547,8 @@ const styles = StyleSheet.create({
   cardTileCommittedBadge: { fontSize: 7, color: COLORS.primary, fontWeight: '900', marginBottom: 2, letterSpacing: 1 },
   cardTileIllegal:  { opacity: 0.28 },
   cardGlyph:        { fontSize: 18, marginBottom: 4 },
-  cardName:         { fontSize: 12, fontWeight: '700', color: COLORS.text, textAlign: 'center', maxWidth: 58 },
-  cardNamePt:       { fontSize: 9, color: COLORS.muted, fontWeight: '600', textAlign: 'center', marginTop: 2 },
+  cardName:         { fontFamily: FONTS.bodyBold, fontSize: 12, color: COLORS.text, textAlign: 'center', maxWidth: 58 },
+  cardNamePt:       { fontFamily: FONTS.bodySemiBold, fontSize: 9, color: COLORS.muted, textAlign: 'center', marginTop: 2 },
 
   // ── Maculelê tokens ──
   maculeleRow:      { flexDirection: 'row', gap: 3, marginTop: 5, justifyContent: 'center' },
@@ -1506,21 +1561,21 @@ const styles = StyleSheet.create({
   // ── Action buttons ──
   attackButton:         { backgroundColor: COLORS.danger, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderBottomWidth: 3, borderBottomColor: '#8B1F1A' },
   attackButtonDisabled: { backgroundColor: COLORS.muted, borderBottomColor: '#7A6A60' },
-  attackButtonText:     { color: '#fff', fontWeight: '800', fontSize: 14, letterSpacing: 0.5 },
+  attackButtonText:     { color: '#fff', fontFamily: FONTS.bodyExtraBold, fontSize: 14, letterSpacing: 0.5 },
 
   specialButton:     { backgroundColor: COLORS.accent, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderBottomWidth: 3, borderBottomColor: '#258A8A' },
-  specialButtonText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  specialButtonText: { color: '#fff', fontFamily: FONTS.bodyExtraBold, fontSize: 13 },
 
   playButton:         { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8, borderBottomWidth: 3, borderBottomColor: COLORS.ember },
   playButtonDisabled: { backgroundColor: COLORS.muted, borderBottomColor: '#7A6A60' },
-  playButtonText:     { color: '#fff', fontWeight: '800', fontSize: 14 },
+  playButtonText:     { color: '#fff', fontFamily: FONTS.bodyExtraBold, fontSize: 14 },
 
   // ── Empty hand / eliminated / burn reveal ──
   emptyHandBox:        { backgroundColor: '#FDE8E8', borderRadius: 14, padding: 14, marginTop: 8, borderWidth: 2, borderColor: COLORS.danger, gap: 6 },
   emptyHandTitle:      { color: COLORS.danger, fontWeight: '800', fontSize: 14 },
   emptyHandSub:        { color: COLORS.danger, fontSize: 12, opacity: 0.8 },
   emptyHandButton:     { backgroundColor: COLORS.danger, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 4, borderBottomWidth: 3, borderBottomColor: '#8B1F1A' },
-  emptyHandButtonText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  emptyHandButtonText: { color: '#fff', fontFamily: FONTS.bodyExtraBold, fontSize: 13 },
 
   eliminatedBox:   { backgroundColor: '#F1E6D4', borderRadius: 14, padding: 14, marginTop: 8, borderWidth: 1.5, borderColor: COLORS.border, gap: 6 },
   eliminatedTitle: { color: COLORS.text, fontWeight: '800', fontSize: 14 },
@@ -1528,10 +1583,10 @@ const styles = StyleSheet.create({
 
   burnRevealZone:  { padding: 16, backgroundColor: COLORS.surface, borderRadius: 18, borderWidth: 2, borderColor: COLORS.danger, gap: 8,
     shadowColor: COLORS.danger, shadowOpacity: 0.15, shadowRadius: 10, elevation: 3 },
-  burnRevealTitle: { fontSize: 14, fontWeight: '900', color: COLORS.danger, letterSpacing: 2, textAlign: 'center' },
+  burnRevealTitle: { fontFamily: FONTS.display, fontSize: 16, color: COLORS.danger, letterSpacing: 2, textAlign: 'center' },
   burnRevealSub:   { fontSize: 12, color: COLORS.muted, textAlign: 'center' },
   juremaRevealZone:  { borderColor: COLORS.gold, shadowColor: COLORS.gold },
-  juremaRevealTitle: { fontSize: 15, fontWeight: '900', color: COLORS.gold, letterSpacing: 2, textAlign: 'center' },
+  juremaRevealTitle: { fontFamily: FONTS.display, fontSize: 17, color: COLORS.gold, letterSpacing: 2, textAlign: 'center' },
 
   // ── Opponent eliminated slots ──
   opponentSlotEliminated: { width: 82, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, borderRadius: 12, padding: 8, opacity: 0.32, borderWidth: 1.5, borderColor: COLORS.sand },

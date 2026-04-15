@@ -11,7 +11,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useGameStore } from '../store/gameStore';
 import { Room, setReady, startMatch, subscribeToRoom } from '../services/matchService';
-import { COLORS } from '../constants/theme';
+import { COLORS, FONTS } from '../constants/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Win'>;
 
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     gap: 10,
     overflow: 'hidden',
   },
-  kicker: { fontSize: 12, fontWeight: '900', color: COLORS.primary, letterSpacing: 2.5 },
+  kicker: { fontFamily: FONTS.bodyExtraBold, fontSize: 12, color: COLORS.primary, letterSpacing: 2.5 },
   winnerStamp: {
     alignSelf: 'flex-start',
     borderRadius: 999,
@@ -169,9 +169,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     backgroundColor: COLORS.primary,
   },
-  winnerStampText: { color: '#fff', fontWeight: '900', fontSize: 11, letterSpacing: 1.5 },
-  title: { fontSize: 34, fontWeight: '900', color: COLORS.text, lineHeight: 38, maxWidth: 280 },
-  subtitle: { fontSize: 15, color: COLORS.muted, lineHeight: 22, maxWidth: 320 },
+  winnerStampText: { fontFamily: FONTS.display, color: '#fff', fontSize: 14, letterSpacing: 2 },
+  title: { fontFamily: FONTS.display, fontSize: 40, color: COLORS.text, lineHeight: 42, maxWidth: 280 },
+  subtitle: { fontFamily: FONTS.bodyRegular, fontSize: 15, color: COLORS.muted, lineHeight: 22, maxWidth: 320 },
   roomTag: {
     marginTop: 6,
     flexDirection: 'row',
@@ -185,8 +185,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  roomTagLabel: { color: COLORS.muted, fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
-  roomTagCode: { color: COLORS.text, fontSize: 14, fontWeight: '900', letterSpacing: 2 },
+  roomTagLabel: { fontFamily: FONTS.bodyExtraBold, color: COLORS.muted, fontSize: 11, letterSpacing: 1.5 },
+  roomTagCode: { fontFamily: FONTS.display, color: COLORS.text, fontSize: 16, letterSpacing: 2 },
 
   panel: {
     backgroundColor: '#F9F4E7',
@@ -197,8 +197,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   panelHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionTitle: { fontSize: 12, fontWeight: '900', color: COLORS.muted, letterSpacing: 1.7 },
-  sectionMeta: { color: COLORS.text, fontSize: 12, fontWeight: '800' },
+  sectionTitle: { fontFamily: FONTS.bodyExtraBold, fontSize: 12, color: COLORS.muted, letterSpacing: 1.7 },
+  sectionMeta: { fontFamily: FONTS.bodyBold, color: COLORS.text, fontSize: 12 },
   playerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -212,12 +212,12 @@ const styles = StyleSheet.create({
   },
   playerRowWinner: { borderColor: '#F0BA69', backgroundColor: '#FFF8EA' },
   playerCopy: { gap: 2 },
-  playerName: { color: COLORS.text, fontWeight: '800', fontSize: 14 },
-  playerRole: { color: COLORS.muted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  playerName: { fontFamily: FONTS.bodyBold, color: COLORS.text, fontSize: 14 },
+  playerRole: { fontFamily: FONTS.bodySemiBold, color: COLORS.muted, fontSize: 11, letterSpacing: 0.5 },
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   badgeReady: { backgroundColor: '#D7F1EA' },
   badgeWaiting: { backgroundColor: '#F8E4DE' },
-  badgeText: { color: COLORS.danger, fontSize: 11, fontWeight: '800' },
+  badgeText: { fontFamily: FONTS.bodyExtraBold, color: COLORS.danger, fontSize: 11 },
   badgeTextReady: { color: '#117A65' },
 
   actions: { gap: 12, paddingBottom: 8 },
@@ -233,15 +233,17 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accent,
     backgroundColor: '#E8F8F8',
   },
-  readyButtonText: { color: COLORS.text, fontWeight: '900', fontSize: 15, letterSpacing: 0.5 },
+  readyButtonText: { fontFamily: FONTS.bodyExtraBold, color: COLORS.text, fontSize: 15, letterSpacing: 0.5 },
   readyButtonTextActive: { color: COLORS.accent },
   startButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 18,
     paddingVertical: 18,
     alignItems: 'center',
+    borderBottomWidth: 3,
+    borderBottomColor: COLORS.ember,
   },
-  startButtonDisabled: { backgroundColor: COLORS.muted },
-  startButtonText: { color: '#fff', fontWeight: '900', fontSize: 14, letterSpacing: 0.8, textAlign: 'center', paddingHorizontal: 12 },
+  startButtonDisabled: { backgroundColor: COLORS.muted, borderBottomColor: '#7A6A60' },
+  startButtonText: { fontFamily: FONTS.bodyExtraBold, color: '#fff', fontSize: 14, letterSpacing: 0.8, textAlign: 'center', paddingHorizontal: 12 },
   note: { color: COLORS.muted, fontSize: 12, textAlign: 'center', lineHeight: 18, paddingHorizontal: 12 },
 });
