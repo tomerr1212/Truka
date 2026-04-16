@@ -1206,6 +1206,38 @@ export default function GameTableScreen({ route, navigation }: Props) {
           </View>
         </Animated.View>
       )}
+
+      {/* ── Jurema ceremony overlay ── */}
+      {isJuremaReveal && (() => {
+        const savedPlayer = match?.players.find(p => p.id === match.juremaPlayerId);
+        return (
+          <Animated.View entering={FadeIn.duration(280)} style={styles.juremaOverlay}>
+            <Animated.View entering={ZoomIn.springify().damping(16).stiffness(240)} style={styles.juremaCard}>
+              <Text style={styles.juremaGlyph}>✿</Text>
+              <Text style={styles.juremaHeadline}>JUREMA</Text>
+              <Text style={styles.juremaPlayerName}>{savedPlayer?.displayName ?? '?'}</Text>
+              <Text style={styles.juremaSub}>
+                reached 5 maculelê{'\n'}reset to 4 — back in the game
+              </Text>
+              <View style={styles.juremaMacRow}>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <View key={i} style={[styles.juremaToken, i < 4 ? styles.juremaTokenActive : styles.juremaTokenGhost]} />
+                ))}
+              </View>
+              {isAttacker ? (
+                <TouchableOpacity
+                  style={styles.juremaContinue}
+                  onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); handleDismissJurema(); }}
+                >
+                  <Text style={styles.juremaContinueText}>CONTINUE →</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.juremaWaiting}>Waiting for {attackerName}…</Text>
+              )}
+            </Animated.View>
+          </Animated.View>
+        );
+      })()}
     </SafeAreaView>
   );
 }
@@ -1726,4 +1758,20 @@ const styles = StyleSheet.create({
   opponentSlotEliminated: { width: 82, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface, borderRadius: 12, padding: 8, opacity: 0.32, borderWidth: 1.5, borderColor: COLORS.sand },
   opponentNameEliminated: { fontSize: 11, fontWeight: '700', color: COLORS.muted, textAlign: 'center' },
   spectatorLabel:         { fontSize: 8, fontWeight: '900', color: COLORS.muted, letterSpacing: 2, marginTop: 3 },
+
+  // ── Jurema ceremony overlay ──
+  juremaOverlay:      { position: 'absolute', inset: 0, backgroundColor: 'rgba(44,26,14,0.82)', justifyContent: 'center', alignItems: 'center', padding: 32 },
+  juremaCard:         { backgroundColor: COLORS.surface, borderRadius: 28, padding: 28, alignItems: 'center', gap: 10, borderWidth: 3, borderColor: COLORS.gold, width: '100%',
+    shadowColor: COLORS.gold, shadowOpacity: 0.35, shadowRadius: 24, shadowOffset: { width: 0, height: 0 }, elevation: 10 },
+  juremaGlyph:        { fontSize: 52, textAlign: 'center' },
+  juremaHeadline:     { fontFamily: FONTS.display, fontSize: 48, color: COLORS.gold, letterSpacing: 4, lineHeight: 48 },
+  juremaPlayerName:   { fontFamily: FONTS.display, fontSize: 28, color: COLORS.text, letterSpacing: 1 },
+  juremaSub:          { fontFamily: FONTS.bodyRegular, fontSize: 13, color: COLORS.muted, textAlign: 'center', lineHeight: 20 },
+  juremaMacRow:       { flexDirection: 'row', gap: 8, marginVertical: 4 },
+  juremaToken:        { width: 18, height: 18, borderRadius: 5, borderWidth: 1.5 },
+  juremaTokenActive:  { backgroundColor: COLORS.danger, borderColor: '#8B1F1A' },
+  juremaTokenGhost:   { backgroundColor: COLORS.sand, borderColor: COLORS.border, opacity: 0.4 },
+  juremaContinue:     { backgroundColor: COLORS.gold, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 36, marginTop: 6, borderBottomWidth: 3, borderBottomColor: '#9A7020' },
+  juremaContinueText: { fontFamily: FONTS.bodyExtraBold, color: '#fff', fontSize: 14, letterSpacing: 1 },
+  juremaWaiting:      { fontFamily: FONTS.bodyRegular, fontSize: 12, color: COLORS.muted, fontStyle: 'italic', marginTop: 4 },
 });

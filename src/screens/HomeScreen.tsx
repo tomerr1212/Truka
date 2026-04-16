@@ -14,7 +14,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useGameStore } from '../store/gameStore';
 import { signInAnon } from '../services/firebase';
-import { createRoom, joinRoom } from '../services/matchService';
+import { joinRoom } from '../services/matchService';
 import { COLORS, FONTS } from '../constants/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
@@ -46,22 +46,11 @@ export default function HomeScreen({ navigation }: Props) {
       });
   }, []);
 
-  const handleCreateRoom = async () => {
+  const handleCreateRoom = () => {
     if (!displayName.trim()) { showError(setError, 'Enter your name first'); return; }
     if (!authReady || !store.localPlayerId) { showError(setError, 'Still signing in, try again'); return; }
-    setLoading(true);
-    setError('');
-    try {
-      store.setLocalPlayer(store.localPlayerId, displayName.trim());
-      const room = await createRoom(store.localPlayerId, displayName.trim());
-      store.setRoomCode(room.code);
-      navigation.navigate('Lobby', { roomCode: room.code });
-    } catch (e: any) {
-      console.error('[createRoom]', e);
-      showError(setError, e.message ?? 'Could not create room');
-    } finally {
-      setLoading(false);
-    }
+    store.setLocalPlayer(store.localPlayerId, displayName.trim());
+    navigation.navigate('CreateRoom');
   };
 
   const handleJoinRoom = async () => {
@@ -128,13 +117,11 @@ export default function HomeScreen({ navigation }: Props) {
           />
 
           <TouchableOpacity
-            style={[styles.primaryButton, (loading || !authReady) && styles.buttonDisabled]}
+            style={[styles.primaryButton, !authReady && styles.buttonDisabled]}
             onPress={handleCreateRoom}
-            disabled={loading || !authReady}
+            disabled={!authReady}
           >
-            <Text style={styles.primaryButtonText}>
-              {loading ? 'LOADING…' : 'CREATE ROOM'}
-            </Text>
+            <Text style={styles.primaryButtonText}>CREATE ROOM</Text>
           </TouchableOpacity>
 
           <View style={styles.divider}>

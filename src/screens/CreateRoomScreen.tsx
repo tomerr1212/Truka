@@ -11,7 +11,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useGameStore } from '../store/gameStore';
 import { createRoom } from '../services/matchService';
-import { COLORS } from '../constants/theme';
+import { COLORS, FONTS } from '../constants/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateRoom'>;
 
@@ -72,15 +72,15 @@ export default function CreateRoomScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container:  { flex: 1, backgroundColor: COLORS.bg, padding: 24, justifyContent: 'space-between' },
-  title:      { fontSize: 13, fontWeight: '700', color: COLORS.muted, letterSpacing: 3, textAlign: 'center', marginBottom: 40 },
+  title:      { fontFamily: FONTS.display, fontSize: 28, color: COLORS.text, letterSpacing: 2, textAlign: 'center', marginBottom: 40 },
   section:    { flex: 1 },
-  label:      { fontSize: 11, fontWeight: '700', color: COLORS.muted, letterSpacing: 1.5, marginBottom: 16 },
+  label:      { fontFamily: FONTS.bodyExtraBold, fontSize: 11, color: COLORS.muted, letterSpacing: 1.5, marginBottom: 16 },
   options:    { flexDirection: 'row', gap: 12 },
   option:     { flex: 1, backgroundColor: COLORS.card, borderRadius: 14, paddingVertical: 24, alignItems: 'center', borderWidth: 2, borderColor: COLORS.border },
   optionActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
-  optionText:   { fontSize: 28, fontWeight: '800', color: COLORS.muted },
+  optionText:       { fontFamily: FONTS.display, fontSize: 36, color: COLORS.muted },
   optionTextActive: { color: COLORS.primary },
-  createButton:         { backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 18, alignItems: 'center' },
-  createButtonDisabled: { backgroundColor: COLORS.muted },
-  createButtonText:     { color: '#fff', fontWeight: '800', fontSize: 16, letterSpacing: 1 },
+  createButton:         { backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 18, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: COLORS.ember },
+  createButtonDisabled: { backgroundColor: COLORS.muted, borderBottomColor: '#7A6A60' },
+  createButtonText:     { fontFamily: FONTS.bodyExtraBold, color: '#fff', fontSize: 16, letterSpacing: 1 },
 });
