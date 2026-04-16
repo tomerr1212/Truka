@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -47,6 +48,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'GameTable'>;
 const subtypeMap = new Map<string, string>();
 buildCardDefinitions().forEach((card, id) => subtypeMap.set(id, card.subtype));
 
+const { height: SCREEN_H } = Dimensions.get('window');
+
 // ─── Visual helpers ───────────────────────────────────────────────────────────
 
 const SUBTYPE_GLYPH: Record<string, string> = {
@@ -70,14 +73,15 @@ function getCardAccentColor(subtype: string): string {
   return COLORS.gold; // specials
 }
 
-function getPhaseBannerColor(phase: string): string {
+
+function getPhaseBannerGradient(phase: string): [string, string] {
   switch (phase) {
-    case 'START_OF_TURN':    return COLORS.primary;
-    case 'ACTION_SELECTION': return COLORS.leather;
-    case 'REVEAL':           return COLORS.ember;
-    case 'BURN_REVEAL':      return COLORS.danger;
-    case 'JUREMA_REVEAL':    return COLORS.gold;
-    default:                 return COLORS.primary;
+    case 'START_OF_TURN':    return [COLORS.primary,  '#C9562A'];
+    case 'ACTION_SELECTION': return [COLORS.leather,  '#1E1208'];
+    case 'REVEAL':           return [COLORS.ember,    '#5E1E08'];
+    case 'BURN_REVEAL':      return [COLORS.danger,   '#8B1F1A'];
+    case 'JUREMA_REVEAL':    return [COLORS.gold,     '#9A7020'];
+    default:                 return [COLORS.primary,  '#C9562A'];
   }
 }
 
@@ -93,6 +97,12 @@ export default function GameTableScreen({ route, navigation }: Props) {
   const [showAgogoFlash, setShowAgogoFlash] = useState(false);
   const chamadaBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const agogoFlashTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Flying maculelê token animation
+  const [flyTokens, setFlyTokens] = useState<{ id: number; toLocal: boolean }[]>([]);
+  const flyTokenIdRef  = useRef(0);
+  const prevLocalMac   = useRef<number | null>(null);
+  const prevOppMacRef  = useRef<Record<string, number> | null>(null);
 
   // Troca / Compra special action state
   const [specialMode, setSpecialMode] = useState<'troca' | 'compra' | null>(null);
@@ -466,7 +476,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
       round: m.round + 1,
       subRound: 0,
       status: winner || draw ? 'finished' : 'active',
-      isDraw: draw || undefined,
+      ...(draw ? { isDraw: true } : {}),
       ...(winner ? { winnerId: winner.id } : {}),
     });
 
@@ -674,7 +684,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
       round: currentMatch.round + 1,
       subRound: 0,
       status: winner || draw ? 'finished' : 'active',
-      isDraw: draw || undefined,
+      ...(draw ? { isDraw: true } : {}),
       ...(winner ? { winnerId: winner.id } : {}),
     });
 
@@ -806,6 +816,35 @@ export default function GameTableScreen({ route, navigation }: Props) {
     }, 2600);
   }, [isChamadaActive]);
 
+  // Maculelê token fly — local player
+  useEffect(() => {
+    const current = localPlayer?.maculeleCount ?? 0;
+    if (prevLocalMac.current !== null && current > prevLocalMac.current) {
+      const id = ++flyTokenIdRef.current;
+      setFlyTokens(prev => [...prev, { id, toLocal: true }]);
+    }
+    prevLocalMac.current = current;
+  }, [localPlayer?.maculeleCount]);
+
+  // Maculelê token fly — opponents
+  const oppMacKey = opponents.map(o => `${o.id}:${o.maculeleCount}`).join(',');
+  useEffect(() => {
+    if (prevOppMacRef.current === null) {
+      const init: Record<string, number> = {};
+      opponents.forEach(o => { init[o.id] = o.maculeleCount; });
+      prevOppMacRef.current = init;
+      return;
+    }
+    opponents.forEach(opp => {
+      const prev = prevOppMacRef.current![opp.id] ?? 0;
+      if (opp.maculeleCount > prev) {
+        const id = ++flyTokenIdRef.current;
+        setFlyTokens(p => [...p, { id, toLocal: false }]);
+      }
+      prevOppMacRef.current![opp.id] = opp.maculeleCount;
+    });
+  }, [oppMacKey]);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Arena floor gradient */}
@@ -816,7 +855,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
         pointerEvents="none"
       />
       {/* Phase banner */}
-      <View style={[styles.phaseBanner, { backgroundColor: getPhaseBannerColor(phase) }]}>
+      <LinearGradient colors={getPhaseBannerGradient(phase)} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.phaseBanner}>
         <Animated.Text key={phase} entering={FadeIn.duration(220)} style={styles.phaseLabel} numberOfLines={1}>{phaseLabel}</Animated.Text>
         <TouchableOpacity style={styles.cheatSheetButton} onPress={() => setShowCheatSheet(true)}>
           <Text style={styles.cheatSheetButtonText}>CHEAT SHEET</Text>
@@ -824,7 +863,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
         <Text style={styles.roundLabel}>
           Round {match?.round ?? 1}{(match?.subRound ?? 0) > 0 ? `.${match!.subRound}` : ''}
         </Text>
-      </View>
+      </LinearGradient>
 
       {showReshuffleNotice && (
         <View style={styles.reshuffleBanner}>
@@ -1284,8 +1323,42 @@ export default function GameTableScreen({ route, navigation }: Props) {
           </Animated.View>
         );
       })()}
+      {/* ── Flying maculelê tokens ── */}
+      {flyTokens.map(({ id, toLocal }) => (
+        <FlyingToken
+          key={id}
+          toLocal={toLocal}
+          onDone={() => setFlyTokens(prev => prev.filter(t => t.id !== id))}
+        />
+      ))}
     </SafeAreaView>
   );
+}
+
+// ─── FlyingToken ───────────────────────────────────────────────────────────────
+
+function FlyingToken({ toLocal, onDone }: { toLocal: boolean; onDone: () => void }) {
+  const translateY   = useSharedValue(0);
+  const tokenOpacity = useSharedValue(1);
+  const tokenScale   = useSharedValue(1.6);
+
+  useEffect(() => {
+    const targetY = toLocal ? SCREEN_H * 0.26 : -SCREEN_H * 0.22;
+    translateY.value  = withSpring(targetY, { stiffness: 155, damping: 22 });
+    tokenScale.value  = withSpring(1.0, { stiffness: 280, damping: 14 });
+    const fade = setTimeout(() => {
+      tokenOpacity.value = withTiming(0, { duration: 200 });
+      setTimeout(onDone, 220);
+    }, 500);
+    return () => clearTimeout(fade);
+  }, []);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }, { scale: tokenScale.value }],
+    opacity: tokenOpacity.value,
+  }));
+
+  return <Animated.View style={[styles.flyToken, style]} />;
 }
 
 // ─── ClashSlot ─────────────────────────────────────────────────────────────────
@@ -1888,4 +1961,7 @@ const styles = StyleSheet.create({
   malandragemTitle:   { fontFamily: FONTS.bodyExtraBold, fontSize: 11, color: COLORS.muted, letterSpacing: 2 },
   malandragemClose:   { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: COLORS.ember },
   malandragemCloseText: { fontFamily: FONTS.bodyExtraBold, color: '#fff', fontSize: 14, letterSpacing: 1 },
+
+  // ── Flying maculelê token ──
+  flyToken: { position: 'absolute', top: '44%', alignSelf: 'center', width: 18, height: 18, borderRadius: 5, backgroundColor: COLORS.danger, borderWidth: 2, borderColor: '#8B1F1A', zIndex: 200 },
 });

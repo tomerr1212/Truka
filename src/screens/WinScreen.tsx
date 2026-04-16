@@ -6,6 +6,9 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeIn, ZoomIn, SlideInDown } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
@@ -35,6 +38,11 @@ export default function WinScreen({ route, navigation }: Props) {
   const myId = store.localPlayerId ?? '';
   const myReady = room?.players[myId]?.isReady ?? false;
   const isWinner = !isDraw && !!winnerId && myId === winnerId;
+
+  // Victory haptic on mount
+  useEffect(() => {
+    if (isWinner) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, []);
   const isHost = room?.hostId === myId;
   const players = room ? Object.entries(room.players) : [];
   const minPlayers = __DEV__ ? 1 : 3;
@@ -52,16 +60,22 @@ export default function WinScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.backgroundOrbTop} />
+      <LinearGradient
+        colors={isWinner ? ['#FFF6E0', '#F5ECD7', '#EDE0C4'] : ['#F5EDD8', '#EDE0C4', '#E8D8B8']}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      {isWinner && <View style={styles.goldOrbTop} />}
       <View style={styles.backgroundOrbBottom} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
-          <Text style={styles.kicker}>RODA COMPLETE</Text>
-          <View style={styles.winnerStamp}>
-            <Text style={styles.winnerStampText}>{isDraw ? 'DRAW' : isWinner ? 'VITORIA' : 'WINNER'}</Text>
-          </View>
-          <Text style={styles.title}>
+        <Animated.View entering={FadeIn.duration(420)} style={styles.heroCard}>
+          {isWinner && <Text style={styles.victoryGlyphs}>✦  ✦  ✦</Text>}
+          <Text style={styles.kicker}>{isWinner ? 'VOCÊ VENCEU' : 'RODA COMPLETE'}</Text>
+          <Animated.View entering={ZoomIn.springify().damping(13).stiffness(260)} style={[styles.winnerStamp, isDraw && styles.winnerStampDraw, isWinner && styles.winnerStampSelf]}>
+            <Text style={styles.winnerStampText}>{isDraw ? 'DRAW' : isWinner ? 'VITÓRIA' : 'WINNER'}</Text>
+          </Animated.View>
+          <Text style={[styles.title, isWinner && styles.titleWinner]}>
             {isDraw ? 'No One Holds The Roda' : isWinner ? 'You Hold The Roda' : `${winnerName} Holds The Roda`}
           </Text>
           <Text style={styles.subtitle}>
@@ -77,17 +91,20 @@ export default function WinScreen({ route, navigation }: Props) {
               <Text style={styles.roomTagCode}>{roomCode}</Text>
             </View>
           )}
-        </View>
+        </Animated.View>
 
-        <View style={styles.panel}>
+        <Animated.View entering={SlideInDown.delay(220).springify().damping(18)} style={styles.panel}>
           <View style={styles.panelHeader}>
             <Text style={styles.sectionTitle}>REMATCH BOARD</Text>
             <Text style={styles.sectionMeta}>{players.filter(([, info]) => info.isReady).length}/{players.length} ready</Text>
           </View>
-          {players.map(([id, info]) => (
-            <View key={id} style={[styles.playerRow, !isDraw && id === winnerId && styles.playerRowWinner]}>
+          {players.map(([id, info], idx) => (
+            <Animated.View key={id} entering={SlideInDown.delay(300 + idx * 70).springify().damping(20)}
+              style={[styles.playerRow, !isDraw && id === winnerId && styles.playerRowWinner]}>
               <View style={styles.playerCopy}>
-                <Text style={styles.playerName}>{info.displayName}</Text>
+                <Text style={styles.playerName}>
+                  {!isDraw && id === winnerId ? '✦ ' : ''}{info.displayName}
+                </Text>
                 <Text style={styles.playerRole}>
                   {!isDraw && id === winnerId ? 'Winner' : id === room?.hostId ? 'Host' : 'Player'}
                 </Text>
@@ -97,9 +114,9 @@ export default function WinScreen({ route, navigation }: Props) {
                   {info.isReady ? 'READY' : 'WAITING'}
                 </Text>
               </View>
-            </View>
+            </Animated.View>
           ))}
-        </View>
+        </Animated.View>
 
         <View style={styles.actions}>
           <TouchableOpacity
@@ -138,45 +155,36 @@ export default function WinScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   content: { padding: 24, gap: 18 },
-  backgroundOrbTop: {
-    position: 'absolute',
-    top: -80,
-    right: -50,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: '#F3C78A',
-    opacity: 0.35,
+  goldOrbTop: {
+    position: 'absolute', top: -60, right: -40,
+    width: 240, height: 240, borderRadius: 120,
+    backgroundColor: COLORS.gold, opacity: 0.18,
   },
   backgroundOrbBottom: {
-    position: 'absolute',
-    bottom: -90,
-    left: -70,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: '#D8EEE8',
-    opacity: 0.6,
+    position: 'absolute', bottom: -90, left: -70,
+    width: 240, height: 240, borderRadius: 120,
+    backgroundColor: '#D8EEE8', opacity: 0.5,
   },
   heroCard: {
     backgroundColor: COLORS.surface,
-    borderRadius: 28,
-    padding: 22,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    gap: 10,
-    overflow: 'hidden',
+    borderRadius: 28, padding: 22,
+    borderWidth: 1.5, borderColor: COLORS.border,
+    gap: 10, overflow: 'hidden',
+    shadowColor: COLORS.leather, shadowOpacity: 0.10, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3,
   },
+  victoryGlyphs: { fontSize: 20, color: COLORS.gold, letterSpacing: 8, textAlign: 'center', marginBottom: -4 },
   kicker: { fontFamily: FONTS.bodyExtraBold, fontSize: 12, color: COLORS.primary, letterSpacing: 2.5 },
   winnerStamp: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    alignSelf: 'flex-start', borderRadius: 999,
+    paddingHorizontal: 14, paddingVertical: 7,
     backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4,
   },
-  winnerStampText: { fontFamily: FONTS.display, color: '#fff', fontSize: 14, letterSpacing: 2 },
+  winnerStampSelf: { backgroundColor: COLORS.gold, shadowColor: COLORS.gold },
+  winnerStampDraw: { backgroundColor: COLORS.muted },
+  winnerStampText: { fontFamily: FONTS.display, color: '#fff', fontSize: 16, letterSpacing: 2 },
   title: { fontFamily: FONTS.display, fontSize: 40, color: COLORS.text, lineHeight: 42, maxWidth: 280 },
+  titleWinner: { color: COLORS.leather, fontSize: 44 },
   subtitle: { fontFamily: FONTS.bodyRegular, fontSize: 15, color: COLORS.muted, lineHeight: 22, maxWidth: 320 },
   roomTag: {
     marginTop: 6,
