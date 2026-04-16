@@ -65,14 +65,20 @@ export function getWinner(players: Player[]): Player | null {
   return alive.length === 1 ? alive[0] : null;
 }
 
+export function isDraw(players: Player[]): boolean {
+  return players.filter((p) => !p.isEliminated).length === 0;
+}
+
 // ─── Get next attacker (seat order, skip eliminated) ─────────────────────────
 
 export function getNextAttackerId(
   players: Player[],
   currentAttackerId: string
-): string {
+): string | null {
   const alive = players.filter((p) => !p.isEliminated);
+  if (alive.length === 0) return null;
   const idx = alive.findIndex((p) => p.id === currentAttackerId);
+  if (idx === -1) return alive[0]?.id ?? null;
   const nextIdx = (idx + 1) % alive.length;
   return alive[nextIdx].id;
 }

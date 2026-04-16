@@ -154,7 +154,7 @@ export function replenishAfterClash(
     );
   }
 
-  const nextAttackerId = getNextAttackerId(players, match.currentAttackerId);
+  const nextAttackerId = getNextAttackerId(players, match.currentAttackerId) ?? match.currentAttackerId;
 
   return {
     ...match,
@@ -228,7 +228,7 @@ export function applyAgogo(
     p.id === playerId ? { ...p, hand: newHand } : p
   );
 
-  const nextAttackerId = getNextAttackerId(players, playerId);
+  const nextAttackerId = getNextAttackerId(players, playerId) ?? playerId;
 
   return {
     ...match,

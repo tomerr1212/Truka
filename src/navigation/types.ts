@@ -5,5 +5,5 @@ export type RootStackParamList = {
   GameTable:  { matchId: string };
   CardGallery: undefined;
   Tutorial:   undefined;
-  Win:        { winnerId: string; winnerName: string; matchId: string };
+  Win:        { matchId: string; winnerId?: string; winnerName?: string; isDraw?: boolean };
 };

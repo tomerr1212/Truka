@@ -36,7 +36,7 @@ import {
 } from '../services/matchService';
 import { Match, Player, StagedAction, ActionSubtype } from '../types';
 import { resolveClash, FloreoState } from '../engine/collision';
-import { applyMaculeleChanges, eliminatePlayer, findJuremaCard, applyJurema, getNextAttackerId, getWinner } from '../engine/maculele';
+import { applyMaculeleChanges, eliminatePlayer, findJuremaCard, applyJurema, getNextAttackerId, getWinner, isDraw } from '../engine/maculele';
 import { getDrawCount, drawCards } from '../engine/replenishment';
 
 import { COLORS, FONTS } from '../constants/theme';
@@ -89,6 +89,10 @@ export default function GameTableScreen({ route, navigation }: Props) {
   const [staging, setStaging] = useState<Record<string, StagedAction>>({});
   const [showReshuffleNotice, setShowReshuffleNotice] = useState(false);
   const [showCheatSheet, setShowCheatSheet] = useState(false);
+  const [showChamadaBanner, setShowChamadaBanner] = useState(false);
+  const [showAgogoFlash, setShowAgogoFlash] = useState(false);
+  const chamadaBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const agogoFlashTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Troca / Compra special action state
   const [specialMode, setSpecialMode] = useState<'troca' | 'compra' | null>(null);
@@ -133,15 +137,15 @@ export default function GameTableScreen({ route, navigation }: Props) {
   }, [matchId]);
 
   useEffect(() => {
-    if (!match || match.id !== matchId || match.status !== 'finished' || !match.winnerId) return;
-    const winner = match.players.find((p) => p.id === match.winnerId);
-    if (!winner) return;
+    if (!match || match.id !== matchId || match.status !== 'finished') return;
+    const winner = match.winnerId ? match.players.find((p) => p.id === match.winnerId) : null;
     navigation.replace('Win', {
-      winnerId: winner.id,
-      winnerName: winner.displayName,
       matchId: match.id,
+      winnerId: winner?.id,
+      winnerName: winner?.displayName,
+      isDraw: !!match.isDraw,
     });
-  }, [match?.status, match?.winnerId, match?.id, matchId]);
+  }, [match?.status, match?.winnerId, match?.isDraw, match?.id, matchId]);
 
   useEffect(() => {
     const previousMatch = previousMatchRef.current;
@@ -195,6 +199,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
     if (staging[store.localPlayerId]) return;
     if (myCardStaged) setMyCardStaged(false);
   }, [match?.turnPhase, staging, store.localPlayerId, myCardStaged]);
+
 
   // ── Staging watcher: both staged → advance to REVEAL ──────────────────────
   useEffect(() => {
@@ -263,7 +268,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
     const updatedPlayers = match.players.map(p =>
       p.id === store.localPlayerId ? { ...p, hand: handAfter } : p
     );
-    const nextAttackerId = getNextAttackerId(updatedPlayers, match.currentAttackerId);
+    const nextAttackerId = getNextAttackerId(updatedPlayers, match.currentAttackerId) ?? match.currentAttackerId;
     await writeFullMatch(matchId, {
       ...match, players: updatedPlayers, deck, discardPile: discard,
       currentAttackerId: nextAttackerId, currentDefenderId: null,
@@ -271,6 +276,9 @@ export default function GameTableScreen({ route, navigation }: Props) {
       turnPhase: 'START_OF_TURN', round: match.round + 1, subRound: 0,
     });
     store.selectCard(null);
+    setShowAgogoFlash(true);
+    if (agogoFlashTimerRef.current) clearTimeout(agogoFlashTimerRef.current);
+    agogoFlashTimerRef.current = setTimeout(() => { setShowAgogoFlash(false); agogoFlashTimerRef.current = null; }, 1800);
   };
 
   // ── Malandragem: peek at a target hand at START_OF_TURN ───────────────────
@@ -440,14 +448,15 @@ export default function GameTableScreen({ route, navigation }: Props) {
 
     // 3. Advance turn
     const winner = getWinner(updated.players);
-    const nextAttackerId = winner
+    const draw = isDraw(updated.players);
+    const nextAttackerId = winner || draw
       ? m.currentAttackerId
-      : getNextAttackerId(updated.players, m.currentAttackerId);
+      : (getNextAttackerId(updated.players, m.currentAttackerId) ?? m.currentAttackerId);
 
     await clearStaging(matchId);
     await writeFullMatch(matchId, {
       ...updated,
-      turnPhase: !winner && juremaSavedId ? 'JUREMA_REVEAL' : 'START_OF_TURN',
+      turnPhase: !winner && !draw && juremaSavedId ? 'JUREMA_REVEAL' : 'START_OF_TURN',
       juremaPlayerId: juremaSavedId ?? null,
       currentAttackerId: nextAttackerId,
       currentDefenderId: null,
@@ -456,12 +465,18 @@ export default function GameTableScreen({ route, navigation }: Props) {
       burnRevealHand: null,
       round: m.round + 1,
       subRound: 0,
-      status: winner ? 'finished' : 'active',
+      status: winner || draw ? 'finished' : 'active',
+      isDraw: draw || undefined,
       ...(winner ? { winnerId: winner.id } : {}),
     });
 
-    if (winner) {
-      navigation.replace('Win', { winnerId: winner.id, winnerName: winner.displayName, matchId: m.id });
+    if (winner || draw) {
+      navigation.replace('Win', {
+        matchId: m.id,
+        winnerId: winner?.id,
+        winnerName: winner?.displayName,
+        isDraw: draw,
+      });
     }
   };
 
@@ -641,33 +656,35 @@ export default function GameTableScreen({ route, navigation }: Props) {
     });
 
     const winner = getWinner(players);
-    const nextAttackerId = winner
+    const draw = isDraw(players);
+    const nextAttackerId = winner || draw
       ? currentMatch.currentAttackerId
-      : getNextAttackerId(players, currentMatch.currentAttackerId);
-
-    if (!nextAttackerId) {
-      console.error('[Resolve] nextAttackerId is undefined — players:', players.map(p => `${p.displayName}(elim:${p.isEliminated})`));
-      return;
-    }
+      : (getNextAttackerId(players, currentMatch.currentAttackerId) ?? currentMatch.currentAttackerId);
 
     const juremaPlayerId = juremaSavedIds.length > 0 ? juremaSavedIds[0] : null;
 
     await clearStaging(matchId);
     await writeFullMatch(matchId, {
       ...currentMatch, players, deck, discardPile: discard,
-      turnPhase: !winner && juremaPlayerId ? 'JUREMA_REVEAL' : 'START_OF_TURN',
+      turnPhase: !winner && !draw && juremaPlayerId ? 'JUREMA_REVEAL' : 'START_OF_TURN',
       juremaPlayerId: juremaPlayerId ?? null,
       currentAttackerId: nextAttackerId,
       currentDefenderId: null,
       chamadaPlayerId: null,
       round: currentMatch.round + 1,
       subRound: 0,
-      status: winner ? 'finished' : 'active',
+      status: winner || draw ? 'finished' : 'active',
+      isDraw: draw || undefined,
       ...(winner ? { winnerId: winner.id } : {}),
     });
 
-    if (winner) {
-      navigation.replace('Win', { winnerId: winner.id, winnerName: winner.displayName, matchId: currentMatch.id });
+    if (winner || draw) {
+      navigation.replace('Win', {
+        matchId: currentMatch.id,
+        winnerId: winner?.id,
+        winnerName: winner?.displayName,
+        isDraw: draw,
+      });
     }
   };
 
@@ -778,6 +795,17 @@ export default function GameTableScreen({ route, navigation }: Props) {
     );
   }, [clashResultKey]);
 
+  // Chamada cinematic banner
+  useEffect(() => {
+    if (!isChamadaActive) return;
+    setShowChamadaBanner(true);
+    if (chamadaBannerTimerRef.current) clearTimeout(chamadaBannerTimerRef.current);
+    chamadaBannerTimerRef.current = setTimeout(() => {
+      setShowChamadaBanner(false);
+      chamadaBannerTimerRef.current = null;
+    }, 2600);
+  }, [isChamadaActive]);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Arena floor gradient */}
@@ -830,6 +858,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
                 cardName={attackerCardName}
                 cardSubtype={attackerStagedCard ? CARD_MAP.get(attackerStagedCard.actionCardId)?.subtype : null}
                 flipDelay={0}
+                bothStaged={attackerHasStaged && defenderHasStaged}
               />
               <View style={styles.vsContainer}>
                 <Text style={styles.vsText}>VS</Text>
@@ -843,6 +872,7 @@ export default function GameTableScreen({ route, navigation }: Props) {
                 cardName={defenderCardName}
                 cardSubtype={defenderStagedCard ? CARD_MAP.get(defenderStagedCard.actionCardId)?.subtype : null}
                 flipDelay={80}
+                bothStaged={attackerHasStaged && defenderHasStaged}
               />
             </View>
 
@@ -1101,27 +1131,6 @@ export default function GameTableScreen({ route, navigation }: Props) {
             </TouchableOpacity>
           )}
 
-          {store.peekHand && (
-            <View style={styles.specialPanel}>
-              <Text style={styles.specialPanelTitle}>
-                {store.peekPlayerName ? `${store.peekPlayerName}'s hand` : 'Peeked hand'}
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-                {store.peekHand.map((cardId, index) => (
-                  <CardTile
-                    key={`${cardId}-${index}`}
-                    cardId={cardId}
-                    isSelected={false}
-                    isLegal
-                    onPress={() => {}}
-                  />
-                ))}
-              </ScrollView>
-              <TouchableOpacity style={styles.specialCancel} onPress={() => store.setPeekHand(null)}>
-                <Text style={styles.specialCancelText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           {isEliminated && (
             <View style={styles.eliminatedBox}>
@@ -1207,6 +1216,43 @@ export default function GameTableScreen({ route, navigation }: Props) {
         </Animated.View>
       )}
 
+      {/* ── Chamada cinematic banner ── */}
+      {showChamadaBanner && (
+        <Animated.View entering={SlideInDown.springify().damping(18)} exiting={FadeOut.duration(400)} style={styles.chamadaBanner}>
+          <Text style={styles.chamadaBannerGlyph}>◈</Text>
+          <Text style={styles.chamadaBannerTitle}>CHAMADA</Text>
+          <Text style={styles.chamadaBannerSub}>BOTH PLAY FACE-UP</Text>
+          <Text style={styles.chamadaBannerPlayer}>{chamadaPlayerName} issued the challenge</Text>
+        </Animated.View>
+      )}
+
+      {/* ── Agogô flash overlay ── */}
+      {showAgogoFlash && (
+        <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(600)} style={styles.agogoOverlay}>
+          <Animated.Text entering={ZoomIn.springify()} style={styles.agogoGlyph}>⟳</Animated.Text>
+          <Text style={styles.agogoTitle}>AGOGÔ</Text>
+          <Text style={styles.agogoSub}>Drawing cards & skipping turn</Text>
+        </Animated.View>
+      )}
+
+      {/* ── Malandragem full-screen peek ── */}
+      {store.peekHand && (
+        <Animated.View entering={FadeIn.duration(240)} exiting={FadeOut.duration(280)} style={styles.malandragemOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => store.setPeekHand(null)} activeOpacity={1} />
+          <Animated.View entering={SlideInDown.springify().damping(20)} style={styles.malandragemCard}>
+            <Text style={styles.malandragemTitle}>● PEEKING {(store.peekPlayerName ?? '').toUpperCase()}'S HAND</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 8 }}>
+              {store.peekHand.map((cardId, index) => (
+                <CardTile key={`${cardId}-${index}`} cardId={cardId} isSelected={false} isLegal onPress={() => {}} />
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.malandragemClose} onPress={() => store.setPeekHand(null)}>
+              <Text style={styles.malandragemCloseText}>CLOSE</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      )}
+
       {/* ── Jurema ceremony overlay ── */}
       {isJuremaReveal && (() => {
         const savedPlayer = match?.players.find(p => p.id === match.juremaPlayerId);
@@ -1244,26 +1290,42 @@ export default function GameTableScreen({ route, navigation }: Props) {
 
 // ─── ClashSlot ─────────────────────────────────────────────────────────────────
 
-function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype, flipDelay = 0 }: {
+function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype, flipDelay = 0, bothStaged = false }: {
   label: string; hasStaged: boolean; isLocal: boolean;
   role: 'attacker' | 'defender'; cardName: string | null; cardSubtype?: string | null;
-  flipDelay?: number;
+  flipDelay?: number; bothStaged?: boolean;
 }) {
   const roleColor = role === 'attacker' ? COLORS.primary : COLORS.accent;
   const roleBg    = role === 'attacker' ? COLORS.primaryLight : '#E0F5F5';
   const roleLabel = role === 'attacker' ? 'ATTACKER' : 'DEFENDER';
 
   // Flip animation: scaleX 1→0 (fold away), swap content, 0→1 (unfold front)
-  const flipScale = useSharedValue(1);
+  const flipScale   = useSharedValue(1);
+  const slideX      = useSharedValue(0);
+  const cardOpacity = useSharedValue(1);
+  const goldFlash   = useSharedValue(0);
+  const bothPop     = useSharedValue(1);
   const [showFront, setShowFront] = useState(!!cardName);
   const prevCardName = useRef<string | null>(cardName);
 
+  // Card reveal / replacement animation
   useEffect(() => {
-    const wasRevealed = !!prevCardName.current;
+    const prevName = prevCardName.current;
     prevCardName.current = cardName;
 
-    if (cardName && !wasRevealed) {
-      // Card just revealed — play flip after optional delay
+    if (cardName && prevName && cardName !== prevName) {
+      // Troca/Compra replacement: fly new card in from right with gold flash
+      slideX.value = 32;
+      cardOpacity.value = 0;
+      goldFlash.value = 0;
+      const t = setTimeout(() => {
+        slideX.value = withSpring(0, { stiffness: 260, damping: 18 });
+        cardOpacity.value = withTiming(1, { duration: 220 });
+        goldFlash.value = withSequence(withTiming(0.5, { duration: 120 }), withTiming(0, { duration: 340 }));
+      }, 16);
+      return () => clearTimeout(t);
+    } else if (cardName && !prevName) {
+      // Card just revealed — flip after optional delay
       const doFlip = () => {
         setShowFront(false);
         flipScale.value = 1;
@@ -1281,20 +1343,37 @@ function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype, fli
     } else if (!cardName) {
       setShowFront(false);
       flipScale.value = 1;
+      slideX.value = 0;
+      cardOpacity.value = 1;
     } else {
-      // Already revealed on mount (reconnect)
       setShowFront(true);
     }
   }, [cardName]);
 
+  // Both-staged pop: scale punch when both players have placed their card
+  const prevBothStaged = useRef(bothStaged);
+  useEffect(() => {
+    if (bothStaged && !prevBothStaged.current) {
+      bothPop.value = withSequence(
+        withSpring(1.09, { stiffness: 440, damping: 10 }),
+        withSpring(1,    { stiffness: 260, damping: 16 }),
+      );
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    prevBothStaged.current = bothStaged;
+  }, [bothStaged]);
+
   const flipStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: flipScale.value }],
+    transform: [{ scaleX: flipScale.value }, { translateX: slideX.value }],
+    opacity: cardOpacity.value,
   }));
+  const goldFlashStyle = useAnimatedStyle(() => ({ opacity: goldFlash.value }));
+  const bothPopStyle   = useAnimatedStyle(() => ({ transform: [{ scale: bothPop.value }] }));
 
   const faceDown = hasStaged && !cardName;
 
   return (
-    <View style={styles.clashSlot}>
+    <Animated.View style={[styles.clashSlot, bothPopStyle]}>
       <Text style={[styles.clashSlotRole, role === 'attacker' ? styles.clashSlotRoleAttacker : styles.clashSlotRoleDefender]}>
         {roleLabel}
       </Text>
@@ -1305,6 +1384,8 @@ function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype, fli
         showFront && cardName ? { borderColor: roleColor, backgroundColor: roleBg, borderWidth: 2.5 } : undefined,
         flipStyle,
       ]}>
+        {/* Gold flash overlay for Troca/Compra replacement */}
+        <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 12, backgroundColor: COLORS.gold }, goldFlashStyle]} pointerEvents="none" />
         {showFront && cardName ? (
           <>
             {cardSubtype && <Text style={[styles.clashCardRevealedGlyph, { color: roleColor }]}>{SUBTYPE_GLYPH[cardSubtype] ?? '▪'}</Text>}
@@ -1321,7 +1402,7 @@ function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype, fli
       {faceDown && !showFront && (
         <Text style={[styles.clashCardReady, { color: roleColor }]}>{isLocal ? 'Placed ✓' : 'Waiting…'}</Text>
       )}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -1330,14 +1411,15 @@ function ClashSlot({ label, hasStaged, isLocal, role, cardName, cardSubtype, fli
 function OpponentSlot({ player, isDefender, isAttacker, isSelectedTarget }: {
   player: Player; isDefender: boolean; isAttacker: boolean; isSelectedTarget: boolean;
 }) {
-  const slotShake   = useSharedValue(0);
-  const slotOpacity = useSharedValue(player.isEliminated ? 0.3 : 1);
-  const slotScale   = useSharedValue(player.isEliminated ? 0.86 : 1);
-  const prevElim    = useRef(player.isEliminated);
+  const slotShake    = useSharedValue(0);
+  const slotOpacity  = useSharedValue(player.isEliminated ? 0.3 : 1);
+  const slotScale    = useSharedValue(player.isEliminated ? 0.86 : 1);
+  const attackGlow   = useSharedValue(1);
+  const prevElim     = useRef(player.isEliminated);
+  const prevAttacker = useRef(isAttacker);
 
   useEffect(() => {
     if (player.isEliminated && !prevElim.current) {
-      // Shake then collapse
       slotShake.value = withSequence(
         withTiming(-7, { duration: 45 }),
         withRepeat(withSequence(
@@ -1353,8 +1435,19 @@ function OpponentSlot({ player, isDefender, isAttacker, isSelectedTarget }: {
     prevElim.current = player.isEliminated;
   }, [player.isEliminated]);
 
+  // Turn advance glow: scale pop when this slot becomes the attacker
+  useEffect(() => {
+    if (isAttacker && !prevAttacker.current) {
+      attackGlow.value = withSequence(
+        withSpring(1.07, { stiffness: 440, damping: 10 }),
+        withSpring(1,    { stiffness: 240, damping: 16 }),
+      );
+    }
+    prevAttacker.current = isAttacker;
+  }, [isAttacker]);
+
   const elimStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: slotShake.value }, { scale: slotScale.value }],
+    transform: [{ translateX: slotShake.value }, { scale: slotScale.value * attackGlow.value }],
     opacity: slotOpacity.value,
   }));
 
@@ -1774,4 +1867,25 @@ const styles = StyleSheet.create({
   juremaContinue:     { backgroundColor: COLORS.gold, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 36, marginTop: 6, borderBottomWidth: 3, borderBottomColor: '#9A7020' },
   juremaContinueText: { fontFamily: FONTS.bodyExtraBold, color: '#fff', fontSize: 14, letterSpacing: 1 },
   juremaWaiting:      { fontFamily: FONTS.bodyRegular, fontSize: 12, color: COLORS.muted, fontStyle: 'italic', marginTop: 4 },
+
+  // ── Chamada cinematic banner ──
+  chamadaBanner:       { position: 'absolute', bottom: 160, left: 0, right: 0, alignItems: 'center', paddingVertical: 18, paddingHorizontal: 20,
+    backgroundColor: 'rgba(44,26,14,0.92)', borderTopWidth: 2, borderBottomWidth: 2, borderColor: COLORS.leather, gap: 4 },
+  chamadaBannerGlyph:  { fontSize: 32, color: COLORS.gold },
+  chamadaBannerTitle:  { fontFamily: FONTS.display, fontSize: 40, color: '#fff', letterSpacing: 5, lineHeight: 42 },
+  chamadaBannerSub:    { fontFamily: FONTS.bodyExtraBold, fontSize: 13, color: COLORS.gold, letterSpacing: 3, marginTop: 2 },
+  chamadaBannerPlayer: { fontFamily: FONTS.bodyRegular, fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+
+  // ── Agogô flash overlay ──
+  agogoOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(44,26,14,0.80)', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  agogoGlyph:   { fontSize: 64, color: COLORS.accent },
+  agogoTitle:   { fontFamily: FONTS.display, fontSize: 48, color: '#fff', letterSpacing: 4 },
+  agogoSub:     { fontFamily: FONTS.bodyRegular, fontSize: 14, color: 'rgba(255,255,255,0.7)' },
+
+  // ── Malandragem full-screen peek ──
+  malandragemOverlay: { position: 'absolute', inset: 0, backgroundColor: 'rgba(44,26,14,0.82)', justifyContent: 'flex-end' },
+  malandragemCard:    { backgroundColor: COLORS.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, borderTopWidth: 2, borderColor: COLORS.border, gap: 12 },
+  malandragemTitle:   { fontFamily: FONTS.bodyExtraBold, fontSize: 11, color: COLORS.muted, letterSpacing: 2 },
+  malandragemClose:   { backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderBottomWidth: 3, borderBottomColor: COLORS.ember },
+  malandragemCloseText: { fontFamily: FONTS.bodyExtraBold, color: '#fff', fontSize: 14, letterSpacing: 1 },
 });

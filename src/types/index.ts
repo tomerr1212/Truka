@@ -98,6 +98,7 @@ export interface Match {
   discardPile: string[];
   players: Player[];
   winnerId?: string;
+  isDraw?: boolean;
   createdAt: number;
 }
 

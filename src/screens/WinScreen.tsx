@@ -16,7 +16,7 @@ import { COLORS, FONTS } from '../constants/theme';
 type Props = NativeStackScreenProps<RootStackParamList, 'Win'>;
 
 export default function WinScreen({ route, navigation }: Props) {
-  const { winnerId, winnerName, matchId } = route.params;
+  const { winnerId, winnerName, matchId, isDraw } = route.params;
   const store = useGameStore();
   const roomCode = store.roomCode;
   const [room, setRoom] = useState<Room | null>(null);
@@ -34,7 +34,7 @@ export default function WinScreen({ route, navigation }: Props) {
 
   const myId = store.localPlayerId ?? '';
   const myReady = room?.players[myId]?.isReady ?? false;
-  const isWinner = myId === winnerId;
+  const isWinner = !isDraw && !!winnerId && myId === winnerId;
   const isHost = room?.hostId === myId;
   const players = room ? Object.entries(room.players) : [];
   const minPlayers = __DEV__ ? 1 : 3;
@@ -59,11 +59,15 @@ export default function WinScreen({ route, navigation }: Props) {
         <View style={styles.heroCard}>
           <Text style={styles.kicker}>RODA COMPLETE</Text>
           <View style={styles.winnerStamp}>
-            <Text style={styles.winnerStampText}>{isWinner ? 'VITORIA' : 'WINNER'}</Text>
+            <Text style={styles.winnerStampText}>{isDraw ? 'DRAW' : isWinner ? 'VITORIA' : 'WINNER'}</Text>
           </View>
-          <Text style={styles.title}>{isWinner ? 'You Hold The Roda' : `${winnerName} Holds The Roda`}</Text>
+          <Text style={styles.title}>
+            {isDraw ? 'No One Holds The Roda' : isWinner ? 'You Hold The Roda' : `${winnerName} Holds The Roda`}
+          </Text>
           <Text style={styles.subtitle}>
-            {isWinner
+            {isDraw
+              ? 'Both final players were eliminated in the same clash. Mark ready if you want another round.'
+              : isWinner
               ? 'Everyone else is out. Mark yourself ready if you want another round.'
               : `${winnerName} is the last player standing. Vote if you want an immediate rematch.`}
           </Text>
@@ -81,10 +85,12 @@ export default function WinScreen({ route, navigation }: Props) {
             <Text style={styles.sectionMeta}>{players.filter(([, info]) => info.isReady).length}/{players.length} ready</Text>
           </View>
           {players.map(([id, info]) => (
-            <View key={id} style={[styles.playerRow, id === winnerId && styles.playerRowWinner]}>
+            <View key={id} style={[styles.playerRow, !isDraw && id === winnerId && styles.playerRowWinner]}>
               <View style={styles.playerCopy}>
                 <Text style={styles.playerName}>{info.displayName}</Text>
-                <Text style={styles.playerRole}>{id === winnerId ? 'Winner' : id === room?.hostId ? 'Host' : 'Player'}</Text>
+                <Text style={styles.playerRole}>
+                  {!isDraw && id === winnerId ? 'Winner' : id === room?.hostId ? 'Host' : 'Player'}
+                </Text>
               </View>
               <View style={[styles.badge, info.isReady ? styles.badgeReady : styles.badgeWaiting]}>
                 <Text style={[styles.badgeText, info.isReady && styles.badgeTextReady]}>
